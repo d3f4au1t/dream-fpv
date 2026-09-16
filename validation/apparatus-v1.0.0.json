@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "validation_status": "passed",
+  "recorded_at_utc": "2026-09-16T20:32:47Z",
+  "repository": "https://github.com/d3f4au1t/dream-fpv",
+  "apparatus": {
+    "id": "dream_fpv_webots",
+    "version": "1.0.0",
+    "manifest_sha256": "31fdc6b9aa170c97f509ad6c476125a6e204da1b6dc7c2d7513c8dc6c7bd6047",
+    "controller_config_sha256": "8b7aee4596f3258f4a7987eefc71aa68953834753875627de39d2952db4e3b25"
+  },
+  "validated_source": {
+    "git_commit": "4250cbd8cd93d9a83a33a3062870ebc8bbc7e272",
+    "git_dirty": false,
+    "note": "The validation-record commit adds only this evidence file; all locked apparatus files and the tested source tree are unchanged from this commit."
+  },
+  "environment": {
+    "webots_tested_version": "R2025a",
+    "webots_actual_version": "R2025a",
+    "python_version": "3.12.4",
+    "platform": "macOS 26.3 (25D125)"
+  },
+  "checks": {
+    "apparatus_verifier": {
+      "passed": true,
+      "command": "./scripts/verify_apparatus.py",
+      "locked_file_count": 10,
+      "course_zone_count": 10,
+      "semantic_cross_checks": [
+        "world random seed",
+        "physics time step",
+        "gravity",
+        "camera and depth geometry",
+        "camera and depth resolution",
+        "depth range",
+        "sensor and telemetry periods",
+        "installed Webots version",
+        "Python version"
+      ]
+    },
+    "unit_tests": {
+      "passed": true,
+      "command": "python3 -m unittest discover -s tests -v",
+      "test_count": 75,
+      "failure_count": 0
+    },
+    "startup_smoke": {
+      "passed": true,
+      "command": "DREAM_MODE_KEEP_SMOKE=1 ./scripts/smoke_test.sh",
+      "attempt": 1,
+      "simulator_steps": 800,
+      "telemetry_data_rows": 160,
+      "run_fingerprint_sha256": "d2142df8b0924c950da65cd4f57ce414a2e37707385f5f18d34af7dd7b6da718",
+      "artifact_sha256": {
+        "run_manifest.json": "b7d38f8727877caa4bb2b07f4bba1b82634309a33e94c6ce430025c921fdfb1f",
+        "smoke_test_ok.json": "dbc2e7c0de0064d2ffe200705ef586f696cda5ef15826e7cc470a52fc6fba1ad",
+        "telemetry.csv": "1d609f23d2579ee333cfee2df53559dcf43230c7f2b8b6a87462edfe8108b372",
+        "rgb_initial.png": "306cb0e52a4dd9de243bdf7efdcd98117531a49b45b01b5769c54111f7413edc",
+        "depth_initial.png": "cfdf9e606d847740467526200a753d424f946ca29e2f417b3be2e3b879d5d0d8",
+        "depth_initial.f32": "db2ec52d08bb8f174a5093a14b6b54af797748cc9e0a6226999148b6e6247de1",
+        "depth_initial.json": "1decb063e01864b4d78b25472b22ebefa556264c3d77db52b2726dd36b410c96"
+      }
+    },
+    "flight_dynamics_acceptance": {
+      "passed": true,
+      "command": "./scripts/flight_dynamics_test.py",
+      "generated_at_utc": "2026-09-16T20:31:53.847009+00:00",
+      "scenario_count": 72,
+      "completed_scenario_count": 72,
+      "failed_check_count": 0,
+      "startup_retries_used": 0,
+      "run_manifest_count": 72,
+      "run_fingerprint_count": 72,
+      "unique_run_fingerprint_count": 70,
+      "determinism_replay_fingerprint_sha256": "9a20cb84d955810043d8794c2ffc9bf7e00b6034c0d3b0c9ec0b3afe1d899076",
+      "report_sha256": "b7fad642ea91b1a160aa122c81fd571d4f110a8b032576ae3d02a547592132b5"
+    }
+  },
+  "scope_boundary": {
+    "software_apparatus_phase_1_complete": true,
+    "physical_digital_twin_validated": false,
+    "formal_participant_trials_ready": false,
+    "pending_before_participant_trials": [
+      "Record the Apex T19 USB VID, PID, firmware revision, and raw endpoint sweep.",
+      "Validate the simulator dynamics against measured physical-airframe data."
+    ]
+  }
+}
