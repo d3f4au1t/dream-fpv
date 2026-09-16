@@ -47,19 +47,7 @@ The main view is mounted to the aircraft and matches the research camera: 120° 
 
 ## Input
 
-Manual input is available through the keyboard or a supported HID controller adapter.
-
-### Keyboard
-
-| Action | Key |
-|---|---|
-| Pitch forward/back | Up / Down |
-| Roll left/right | Left / Right |
-| Yaw left/right | A / D |
-| Increase/decrease throttle | W / S |
-| Set throttle to the hover reference | Space |
-| Emergency motor stop | Q |
-| Arm after an emergency stop | E with throttle low |
+Manual input is available through the keyboard or a supported HID controller adapter. Keyboard input is for testing purposes only, and should not be for normal usage.
 
 Set `DREAM_MODE_DISABLE_JOYSTICK=1` before launch to force keyboard input.
 
@@ -98,6 +86,8 @@ The frozen rate profile is:
 | Roll | 1.25 | 0.68 | 0.22 | 781.25°/s |
 | Pitch | 1.25 | 0.68 | 0.22 | 781.25°/s |
 | Yaw | 1.25 | 0.55 | 0.28 | 555.56°/s |
+
+Reference model is the APEX 1.6 inch Raven 2.0 cinewhoop done. 
 
 Throttle commands motor thrust directly; there is no altitude hold. The reference model is a 198 g, 2.5-inch, 4S quad with 5000 KV motors and an approximately 32% hover command.
 
