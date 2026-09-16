@@ -8,13 +8,19 @@ smoke_dir="$(mktemp -d /tmp/dream-mode-webots-smoke.XXXXXX)"
 output_file="$smoke_dir/webots-output.txt"
 error_file="$smoke_dir/webots-error.txt"
 webots_pid=""
+keep_smoke="${DREAM_MODE_KEEP_SMOKE:-0}"
+unset DREAM_MODE_KEEP_SMOKE
 
 cleanup() {
   if [[ -n "$webots_pid" ]] && kill -0 "$webots_pid" 2>/dev/null; then
     kill "$webots_pid" 2>/dev/null || true
     wait "$webots_pid" 2>/dev/null || true
   fi
-  rm -rf "$smoke_dir"
+  if [[ "$keep_smoke" == "1" ]]; then
+    print "Preserved smoke-test artifacts: $smoke_dir"
+  else
+    rm -rf "$smoke_dir"
+  fi
 }
 trap cleanup EXIT
 
@@ -111,6 +117,7 @@ if ! python3 - \
   "$smoke_dir/log/depth_initial.json" \
   "$smoke_dir/log/telemetry.csv" <<'PY'
 import csv
+import hashlib
 import json
 import math
 from pathlib import Path
@@ -132,11 +139,31 @@ with run_manifest_path.open(encoding="utf-8") as manifest_file:
 apparatus = run_manifest.get("apparatus", {})
 if apparatus.get("id") != "dream_fpv_webots" or apparatus.get("version") != "1.0.0":
     raise SystemExit(f"Unexpected apparatus identity: {apparatus}")
+if marker.get("apparatus_id") != apparatus["id"] or marker.get("apparatus_version") != apparatus["version"]:
+    raise SystemExit("Smoke marker and run manifest apparatus identity disagree")
 fingerprint = run_manifest.get("run_fingerprint_sha256", "")
 if len(fingerprint) != 64 or any(character not in "0123456789abcdef" for character in fingerprint):
     raise SystemExit("Run manifest has an invalid fingerprint")
 if marker.get("run_fingerprint_sha256") != fingerprint:
     raise SystemExit("Smoke marker and run manifest fingerprints disagree")
+controller_config_sha256 = run_manifest.get("controller_config_sha256", "")
+if (
+    len(controller_config_sha256) != 64
+    or any(character not in "0123456789abcdef" for character in controller_config_sha256)
+):
+    raise SystemExit("Run manifest has an invalid controller config SHA-256")
+if hashlib.sha256(config_path.read_bytes()).hexdigest() != controller_config_sha256:
+    raise SystemExit("Run manifest controller config SHA-256 does not match controller.json")
+locked_config_sha256 = apparatus.get("locked_file_hashes", {}).get(
+    "config/controller.json"
+)
+if locked_config_sha256 != controller_config_sha256:
+    raise SystemExit("Explicit and frozen controller config SHA-256 values disagree")
+if marker.get("controller_config_sha256") != controller_config_sha256:
+    raise SystemExit("Smoke marker and run manifest controller config SHA-256 disagree")
+runtime = run_manifest.get("runtime", {})
+if runtime.get("webots_actual_version") != runtime.get("webots_tested_version"):
+    raise SystemExit(f"Unexpected Webots runtime version: {runtime}")
 
 expected_rgb = (480, 270)
 expected_depth = (320, 180)
@@ -169,6 +196,8 @@ if not 0.0 < depth_metadata.get("min_range_m", 0.0) < depth_metadata.get("max_ra
     raise SystemExit("Depth metadata range is invalid")
 if depth_metadata.get("run_fingerprint_sha256") != fingerprint:
     raise SystemExit("Depth metadata and run manifest fingerprints disagree")
+if depth_metadata.get("controller_config_sha256") != controller_config_sha256:
+    raise SystemExit("Depth metadata and run manifest controller config SHA-256 disagree")
 expected_depth_bytes = expected_depth[0] * expected_depth[1] * 4
 if depth_raw_path.stat().st_size != expected_depth_bytes:
     raise SystemExit(
@@ -215,8 +244,28 @@ valid_zone_ids = {0}
 valid_zone_ids.update(
     int(zone["code"]) for zone in run_manifest["course_zones"]["zones"]
 )
+run_seed = run_manifest.get("random_seed")
+if type(run_seed) is not int:
+    raise SystemExit("Run manifest random seed is not an integer")
+try:
+    apparatus_version = tuple(int(part) for part in apparatus["version"].split("."))
+except (KeyError, TypeError, ValueError) as error:
+    raise SystemExit("Run manifest apparatus version is invalid") from error
+if len(apparatus_version) != 3:
+    raise SystemExit("Run manifest apparatus version is invalid")
+expected_provenance = {
+    "run_seed": str(run_seed),
+    "apparatus_version_major": str(apparatus_version[0]),
+    "apparatus_version_minor": str(apparatus_version[1]),
+    "apparatus_version_patch": str(apparatus_version[2]),
+}
 times = []
 for row_number, row in enumerate(rows, start=2):
+    for field, expected in expected_provenance.items():
+        if row.get(field) != expected:
+            raise SystemExit(
+                f"Telemetry row {row_number} has {field}={row.get(field)!r}; expected {expected!r}"
+            )
     for field, encoded in row.items():
         try:
             value = float(encoded)

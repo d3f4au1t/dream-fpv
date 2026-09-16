@@ -7,6 +7,7 @@ import csv
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import hashlib
 from itertools import product
 import json
 import math
@@ -589,11 +590,69 @@ def run_scenario(scenario: Scenario, index: int, run_root: Path) -> Result:
     apparatus = run_manifest.get("apparatus", {})
     if apparatus.get("id") != "dream_fpv_webots" or apparatus.get("version") != "1.0.0":
         raise RuntimeError(f"unexpected apparatus identity: {apparatus}")
+    fingerprint = run_manifest.get("run_fingerprint_sha256", "")
+    if len(fingerprint) != 64 or any(
+        character not in "0123456789abcdef" for character in fingerprint
+    ):
+        raise RuntimeError("run manifest fingerprint is invalid")
+    controller_config_sha256 = run_manifest.get("controller_config_sha256", "")
+    actual_config_sha256 = hashlib.sha256(
+        (PROJECT_ROOT / "config" / "controller.json").read_bytes()
+    ).hexdigest()
+    if controller_config_sha256 != actual_config_sha256:
+        raise RuntimeError("run manifest controller config SHA-256 is incorrect")
+    if (
+        apparatus.get("locked_file_hashes", {}).get("config/controller.json")
+        != controller_config_sha256
+    ):
+        raise RuntimeError("explicit and frozen controller config digests disagree")
+    runtime = run_manifest.get("runtime", {})
+    if runtime.get("webots_actual_version") != runtime.get("webots_tested_version"):
+        raise RuntimeError(f"unexpected Webots runtime version: {runtime}")
+    run_seed = run_manifest.get("random_seed")
+    if type(run_seed) is not int:
+        raise RuntimeError("run manifest random seed is not an integer")
+    try:
+        version_parts = tuple(int(part) for part in apparatus["version"].split("."))
+    except (KeyError, TypeError, ValueError) as error:
+        raise RuntimeError("run manifest apparatus version is invalid") from error
+    if len(version_parts) != 3:
+        raise RuntimeError("run manifest apparatus version is invalid")
+    expected_provenance = {
+        "run_seed": str(run_seed),
+        "apparatus_version_major": str(version_parts[0]),
+        "apparatus_version_minor": str(version_parts[1]),
+        "apparatus_version_patch": str(version_parts[2]),
+    }
+    valid_zone_ids = {0}
+    valid_zone_ids.update(
+        int(zone["code"]) for zone in run_manifest["course_zones"]["zones"]
+    )
     with telemetry_path.open(newline="", encoding="utf-8") as telemetry_file:
-        rows = [
-            {key: float(value) for key, value in row.items()}
-            for row in csv.DictReader(telemetry_file)
-        ]
+        rows = []
+        for row_number, row in enumerate(csv.DictReader(telemetry_file), start=2):
+            for field, expected in expected_provenance.items():
+                if row.get(field) != expected:
+                    raise RuntimeError(
+                        f"telemetry row {row_number} has {field}={row.get(field)!r}; "
+                        f"expected {expected!r}"
+                    )
+            try:
+                zone_value = float(row["course_zone_id"])
+            except (KeyError, TypeError, ValueError) as error:
+                raise RuntimeError(
+                    f"telemetry row {row_number} has an invalid course zone"
+                ) from error
+            if not zone_value.is_integer() or int(zone_value) not in valid_zone_ids:
+                raise RuntimeError(
+                    f"telemetry row {row_number} has an unknown course zone"
+                )
+            try:
+                rows.append({key: float(value) for key, value in row.items()})
+            except (TypeError, ValueError) as error:
+                raise RuntimeError(
+                    f"telemetry row {row_number} contains a non-numeric value"
+                ) from error
     return Result(
         scenario=scenario,
         rows=rows,
@@ -1219,6 +1278,18 @@ def check_reproducibility(metrics: dict[str, dict], failures: list[str]) -> None
         failures.append("determinism: settled response changed by more than 1%")
 
 
+def check_replay_fingerprints(results: list[Result], failures: list[str]) -> None:
+    by_name = {result.scenario.name: result for result in results}
+    names = ("determinism_replay_a", "determinism_replay_b")
+    if not all(name in by_name for name in names):
+        return
+    first, second = (
+        by_name[name].run_manifest.get("run_fingerprint_sha256") for name in names
+    )
+    if first != second:
+        failures.append("determinism: replay run fingerprints differ")
+
+
 def main() -> int:
     if not WEBOTS.is_file():
         print(f"Webots was not found at {WEBOTS}", file=sys.stderr)
@@ -1238,12 +1309,20 @@ def main() -> int:
             executor.submit(run_scenario, scenario, index, run_root): scenario
             for index, scenario in enumerate(scenarios)
         }
-        for future in as_completed(futures):
+        for completed, future in enumerate(as_completed(futures), start=1):
             scenario = futures[future]
             try:
                 results.append(future.result())
+                print(
+                    f"[{completed}/{len(scenarios)}] {scenario.name}: complete",
+                    flush=True,
+                )
             except Exception as error:
                 failures.append(f"{scenario.name}: {error}")
+                print(
+                    f"[{completed}/{len(scenarios)}] {scenario.name}: failed",
+                    flush=True,
+                )
 
     for result in sorted(results, key=lambda item: item.scenario.name):
         if not assert_common(result, failures):
@@ -1295,6 +1374,7 @@ def main() -> int:
     check_throttle_invariance(metrics, failures)
     check_throttle_monotonic(metrics, failures)
     check_reproducibility(metrics, failures)
+    check_replay_fingerprints(results, failures)
 
     apparatus_records = {
         (

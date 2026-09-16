@@ -3,8 +3,12 @@
 
 from __future__ import annotations
 
+import ast
 import json
+import math
+import platform
 from pathlib import Path
+import re
 import sys
 
 
@@ -15,6 +19,201 @@ try:
     from apparatus import ApparatusIntegrityError, load_and_verify_apparatus
 finally:
     sys.path.remove(str(CONTROLLER_DIR))
+
+
+class SemanticVerificationError(ValueError):
+    """Raised when a manifest claim disagrees with the executable apparatus."""
+
+
+def require_integer(value, label: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise SemanticVerificationError(f"{label} must be an integer, not {value!r}")
+    return value
+
+
+def require_close(actual: float, expected: float, label: str) -> None:
+    if not math.isclose(float(actual), float(expected), rel_tol=0.0, abs_tol=1e-8):
+        raise SemanticVerificationError(
+            f"{label} is {actual!r}, expected {expected!r}"
+        )
+
+
+def number_from(text: str, pattern: str, label: str) -> float:
+    match = re.search(pattern, text, re.MULTILINE)
+    if match is None:
+        raise SemanticVerificationError(f"Could not find {label}")
+    return float(match.group(1))
+
+
+def vector_from(block: str, field: str, count: int) -> list[float]:
+    match = re.search(
+        rf"^\s*{re.escape(field)}\s+([^\n]+)$",
+        block,
+        re.MULTILINE,
+    )
+    if match is None:
+        raise SemanticVerificationError(f"Could not find {field}")
+    values = [float(value) for value in match.group(1).split()]
+    if len(values) != count:
+        raise SemanticVerificationError(
+            f"{field} contains {len(values)} values, expected {count}"
+        )
+    return values
+
+
+def device_block(world: str, device_type: str, name: str) -> str:
+    pattern = rf'{device_type}\s*\{{(?:(?!\n\s*\}}).)*?name\s+"{re.escape(name)}"(?:(?!\n\s*\}}).)*?\n\s*\}}'
+    match = re.search(pattern, world, re.DOTALL)
+    if match is None:
+        raise SemanticVerificationError(f'Could not find {device_type} "{name}"')
+    return match.group(0)
+
+
+def controller_constants(controller_source: str) -> dict[str, float]:
+    tree = ast.parse(controller_source)
+    for node in tree.body:
+        if isinstance(node, ast.ClassDef) and node.name == "DreamModeController":
+            constants = {}
+            for statement in node.body:
+                if not isinstance(statement, ast.Assign) or len(statement.targets) != 1:
+                    continue
+                target = statement.targets[0]
+                if not isinstance(target, ast.Name):
+                    continue
+                if target.id in {
+                    "LOG_PERIOD_SECONDS",
+                    "CAMERA_PERIOD_MS",
+                    "DEPTH_PERIOD_MS",
+                }:
+                    constants[target.id] = float(ast.literal_eval(statement.value))
+            return constants
+    raise SemanticVerificationError("Could not find DreamModeController constants")
+
+
+def verify_semantic_claims(apparatus: dict, zones: dict, config: dict) -> None:
+    seed = require_integer(apparatus.get("random_seed"), "random_seed")
+    simulator = apparatus.get("simulator", {})
+    basic_time_step_ms = require_integer(
+        simulator.get("basic_time_step_ms"),
+        "simulator.basic_time_step_ms",
+    )
+    timing = apparatus.get("timing", {})
+    for name in (
+        "rgb_period_ms",
+        "depth_period_ms",
+        "default_telemetry_period_ms",
+    ):
+        require_integer(timing.get(name), f"timing.{name}")
+    for index, value in enumerate(apparatus["sensors"]["rgb_resolution"]):
+        require_integer(value, f"sensors.rgb_resolution[{index}]")
+    for index, value in enumerate(apparatus["sensors"]["depth_resolution"]):
+        require_integer(value, f"sensors.depth_resolution[{index}]")
+    for index, zone in enumerate(zones["zones"]):
+        require_integer(zone.get("code"), f"course_zones.zones[{index}].code")
+        require_integer(
+            zone.get("route_order"),
+            f"course_zones.zones[{index}].route_order",
+        )
+
+    world = (PROJECT_ROOT / "worlds" / "dream_mode_research.wbt").read_text(
+        encoding="utf-8"
+    )
+    require_close(
+        number_from(world, r"^\s*randomSeed\s+([-+0-9.eE]+)", "randomSeed"),
+        seed,
+        "world randomSeed",
+    )
+    require_close(
+        number_from(
+            world,
+            r"^\s*basicTimeStep\s+([-+0-9.eE]+)",
+            "basicTimeStep",
+        ),
+        basic_time_step_ms,
+        "world basicTimeStep",
+    )
+    require_close(
+        number_from(world, r"^\s*gravity\s+([-+0-9.eE]+)", "gravity"),
+        config["flight_profile"]["reference_airframe"]["gravity_m_s2"],
+        "world gravity",
+    )
+
+    sensors = apparatus["sensors"]
+    camera = device_block(world, "Camera", "research camera")
+    depth = device_block(world, "RangeFinder", "depth")
+    for label, block in (("camera", camera), ("depth", depth)):
+        for actual, expected in zip(
+            vector_from(block, "translation", 3),
+            sensors["camera_translation_m"],
+        ):
+            require_close(actual, expected, f"{label} translation")
+        for actual, expected in zip(
+            vector_from(block, "rotation", 4),
+            sensors["camera_rotation_axis_angle"],
+        ):
+            require_close(actual, expected, f"{label} rotation")
+        require_close(
+            number_from(block, r"^\s*fieldOfView\s+([-+0-9.eE]+)", "fieldOfView"),
+            sensors["field_of_view_rad"],
+            f"{label} fieldOfView",
+        )
+    for label, block, resolution in (
+        ("camera", camera, sensors["rgb_resolution"]),
+        ("depth", depth, sensors["depth_resolution"]),
+    ):
+        require_close(
+            number_from(block, r"^\s*width\s+([-+0-9.eE]+)", "width"),
+            resolution[0],
+            f"{label} width",
+        )
+        require_close(
+            number_from(block, r"^\s*height\s+([-+0-9.eE]+)", "height"),
+            resolution[1],
+            f"{label} height",
+        )
+    require_close(
+        number_from(depth, r"^\s*minRange\s+([-+0-9.eE]+)", "minRange"),
+        sensors["depth_range_m"][0],
+        "depth minRange",
+    )
+    require_close(
+        number_from(depth, r"^\s*maxRange\s+([-+0-9.eE]+)", "maxRange"),
+        sensors["depth_range_m"][1],
+        "depth maxRange",
+    )
+
+    source = (
+        PROJECT_ROOT
+        / "controllers"
+        / "dream_mode_controller"
+        / "dream_mode_controller.py"
+    ).read_text(encoding="utf-8")
+    constants = controller_constants(source)
+    expected_constants = {
+        "CAMERA_PERIOD_MS": timing["rgb_period_ms"],
+        "DEPTH_PERIOD_MS": timing["depth_period_ms"],
+        "LOG_PERIOD_SECONDS": timing["default_telemetry_period_ms"] / 1000.0,
+    }
+    for name, expected in expected_constants.items():
+        if name not in constants:
+            raise SemanticVerificationError(f"Controller constant {name} is missing")
+        require_close(constants[name], expected, f"controller {name}")
+
+    if platform.python_version() != simulator["python_version"]:
+        raise SemanticVerificationError(
+            "Python version is "
+            f"{platform.python_version()}, expected {simulator['python_version']}"
+        )
+    webots_version_path = Path(
+        "/Applications/Webots.app/Contents/Resources/version.txt"
+    )
+    if not webots_version_path.is_file():
+        raise SemanticVerificationError(f"Webots version file is missing: {webots_version_path}")
+    installed_webots = webots_version_path.read_text(encoding="utf-8").strip()
+    if installed_webots != simulator["tested_version"]:
+        raise SemanticVerificationError(
+            f"Installed Webots is {installed_webots}, expected {simulator['tested_version']}"
+        )
 
 
 def main() -> int:
@@ -28,6 +227,7 @@ def main() -> int:
             PROJECT_ROOT,
             controller_config,
         )
+        verify_semantic_claims(apparatus, zones, controller_config)
     except (ApparatusIntegrityError, OSError, ValueError) as error:
         print(f"Apparatus verification failed: {error}", file=sys.stderr)
         return 1
