@@ -633,9 +633,11 @@ def _run_scenario_once(scenario: Scenario, log_dir: Path) -> Result:
             raise WebotsStartupError(
                 f"Webots exited before controller completion; see {output_path}"
             )
-        if not seen_instance and elapsed >= 12.0:
+        if not run_manifest_path.is_file() and elapsed >= 12.0:
             terminate_test_instance(port)
-            raise WebotsStartupError("controller did not start within 12 seconds")
+            raise WebotsStartupError(
+                "controller did not initialize within 12 seconds"
+            )
         if elapsed >= 35.0:
             terminate_test_instance(port)
             raise RuntimeError("simulation timed out after 35 seconds")
