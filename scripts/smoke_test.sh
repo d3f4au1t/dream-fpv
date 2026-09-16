@@ -2,20 +2,49 @@
 set -euo pipefail
 
 project_dir="${0:A:h:h}"
+webots_app="/Applications/Webots.app"
 webots_bin="/Applications/Webots.app/Contents/MacOS/webots"
 world_path="$project_dir/worlds/dream_mode_research.wbt"
 smoke_dir="$(mktemp -d /tmp/dream-mode-webots-smoke.XXXXXX)"
 output_file="$smoke_dir/webots-output.txt"
 error_file="$smoke_dir/webots-error.txt"
 webots_pid=""
+port=""
 keep_smoke="${DREAM_MODE_KEEP_SMOKE:-0}"
 unset DREAM_MODE_KEEP_SMOKE
 
-cleanup() {
+terminate_test_instance() {
   if [[ -n "$webots_pid" ]] && kill -0 "$webots_pid" 2>/dev/null; then
     kill "$webots_pid" 2>/dev/null || true
+    for _ in {1..20}; do
+      kill -0 "$webots_pid" 2>/dev/null || break
+      sleep 0.1
+    done
+    kill -KILL "$webots_pid" 2>/dev/null || true
     wait "$webots_pid" 2>/dev/null || true
   fi
+  if [[ -n "$port" ]]; then
+    instance_pids=(
+      "${(@f)$(pgrep -f "^${webots_bin} .*--port=${port}( |$)" 2>/dev/null || true)}"
+    )
+    for instance_pid in "${instance_pids[@]}"; do
+      [[ -n "$instance_pid" ]] && kill "$instance_pid" 2>/dev/null || true
+    done
+    for _ in {1..20}; do
+      pgrep -f "^${webots_bin} .*--port=${port}( |$)" >/dev/null 2>&1 || break
+      sleep 0.1
+    done
+    instance_pids=(
+      "${(@f)$(pgrep -f "^${webots_bin} .*--port=${port}( |$)" 2>/dev/null || true)}"
+    )
+    for instance_pid in "${instance_pids[@]}"; do
+      [[ -n "$instance_pid" ]] && kill -KILL "$instance_pid" 2>/dev/null || true
+    done
+  fi
+}
+
+cleanup() {
+  terminate_test_instance
   if [[ "$keep_smoke" == "1" ]]; then
     print "Preserved smoke-test artifacts: $smoke_dir"
   else
@@ -38,31 +67,41 @@ with socket.socket() as listener:
 PY
 )"
 
-QT_MAC_DISABLE_FOREGROUND_APPLICATION_TRANSFORM=1 \
-DREAM_MODE_SMOKE_STEPS=800 \
-DREAM_MODE_FIXED_ROLL=0.0 \
-DREAM_MODE_FIXED_PITCH=0.0 \
-DREAM_MODE_FIXED_YAW=0.0 \
-DREAM_MODE_FIXED_THROTTLE=0.36 \
-DREAM_MODE_RATE_IMPULSE_STEP=300 \
-DREAM_MODE_INITIAL_ROLL_RATE=1.0 \
-DREAM_MODE_INITIAL_PITCH_RATE=1.0 \
-DREAM_MODE_INITIAL_YAW_RATE=1.0 \
-DREAM_MODE_BYPASS_ARMING=1 \
-DREAM_MODE_DISABLE_JOYSTICK=1 \
-DREAM_MODE_LOG_DIR="$smoke_dir/log" \
-PYTHONDONTWRITEBYTECODE=1 \
-  "$webots_bin" --batch --no-rendering --mode=fast \
-  --port="$port" --stdout --stderr "$world_path" \
-  >"$output_file" 2>"$error_file" &
-webots_pid=$!
+if ! /usr/bin/open -F -g -j -n -a "$webots_app" \
+  -o "$output_file" --stderr "$error_file" \
+  --env QT_MAC_DISABLE_FOREGROUND_APPLICATION_TRANSFORM=1 \
+  --env DREAM_MODE_SMOKE_STEPS=800 \
+  --env DREAM_MODE_FIXED_ROLL=0.0 \
+  --env DREAM_MODE_FIXED_PITCH=0.0 \
+  --env DREAM_MODE_FIXED_YAW=0.0 \
+  --env DREAM_MODE_FIXED_THROTTLE=0.36 \
+  --env DREAM_MODE_RATE_IMPULSE_STEP=300 \
+  --env DREAM_MODE_INITIAL_ROLL_RATE=1.0 \
+  --env DREAM_MODE_INITIAL_PITCH_RATE=1.0 \
+  --env DREAM_MODE_INITIAL_YAW_RATE=1.0 \
+  --env DREAM_MODE_BYPASS_ARMING=1 \
+  --env DREAM_MODE_DISABLE_JOYSTICK=1 \
+  --env DREAM_MODE_LOG_DIR="$smoke_dir/log" \
+  --env PYTHONDONTWRITEBYTECODE=1 \
+  --args --batch --no-rendering --mode=fast \
+  --port="$port" --stdout --stderr "$world_path"; then
+  cat "$output_file" "$error_file" 2>/dev/null || true
+  print -u2 "Could not launch the hidden Webots smoke-test instance"
+  exit 1
+fi
 
 deadline=$((SECONDS + 45))
-while kill -0 "$webots_pid" 2>/dev/null; do
+seen_instance=0
+while [[ ! -s "$smoke_dir/log/smoke_test_ok.json" ]]; do
+  if pgrep -f "^${webots_bin} .*--port=${port}( |$)" >/dev/null 2>&1; then
+    seen_instance=1
+  elif (( seen_instance )); then
+    cat "$output_file" "$error_file"
+    print -u2 "Webots smoke test exited before the controller finished"
+    exit 1
+  fi
   if (( SECONDS >= deadline )); then
-    kill "$webots_pid" 2>/dev/null || true
-    wait "$webots_pid" 2>/dev/null || true
-    webots_pid=""
+    terminate_test_instance
     cat "$output_file" "$error_file"
     print -u2 "Webots smoke test timed out after 45 seconds"
     exit 1
@@ -70,13 +109,11 @@ while kill -0 "$webots_pid" 2>/dev/null; do
   sleep 0.2
 done
 
-if ! wait "$webots_pid"; then
-  webots_pid=""
-  cat "$output_file" "$error_file"
-  print -u2 "Webots smoke test exited with an error"
-  exit 1
-fi
-webots_pid=""
+for _ in {1..50}; do
+  pgrep -f "^${webots_bin} .*--port=${port}( |$)" >/dev/null 2>&1 || break
+  sleep 0.1
+done
+terminate_test_instance
 
 if [[ ! -s "$smoke_dir/log/smoke_test_ok.json" ]]; then
   cat "$output_file" "$error_file"
