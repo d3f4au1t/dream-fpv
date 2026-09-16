@@ -14,6 +14,7 @@ import math
 import os
 from pathlib import Path
 import random
+import re
 import signal
 import socket
 import subprocess
@@ -22,6 +23,7 @@ import time
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+WEBOTS_APP = Path("/Applications/Webots.app")
 WEBOTS = Path("/Applications/Webots.app/Contents/MacOS/webots")
 WORLD = PROJECT_ROOT / "worlds" / "dream_mode_research.wbt"
 TIME_STEP_SECONDS = 0.008
@@ -488,22 +490,32 @@ def available_port() -> int:
         return int(listener.getsockname()[1])
 
 
-def terminate_test_instance(process: subprocess.Popen) -> None:
-    """Terminate one hidden Webots process group without touching the live UI."""
-    try:
-        os.killpg(process.pid, signal.SIGTERM)
-    except ProcessLookupError:
-        return
-    try:
-        process.wait(timeout=3)
-        return
-    except subprocess.TimeoutExpired:
-        pass
-    try:
-        os.killpg(process.pid, signal.SIGKILL)
-    except ProcessLookupError:
-        return
-    process.wait(timeout=3)
+def webots_instance_pids(port: int) -> list[int]:
+    pattern = rf"^{re.escape(str(WEBOTS))} .*--port={port}( |$)"
+    result = subprocess.run(
+        ["pgrep", "-f", pattern],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return [int(value) for value in result.stdout.split() if value.isdigit()]
+
+
+def terminate_test_instance(port: int) -> None:
+    """Terminate only the hidden Webots instance using the given TCP port."""
+    for pid in webots_instance_pids(port):
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+    deadline = time.monotonic() + 2.0
+    while time.monotonic() < deadline and webots_instance_pids(port):
+        time.sleep(0.05)
+    for pid in webots_instance_pids(port):
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
 
 
 class WebotsStartupError(RuntimeError):
@@ -512,6 +524,8 @@ class WebotsStartupError(RuntimeError):
 
 def _run_scenario_once(scenario: Scenario, log_dir: Path) -> Result:
     output_path = log_dir / "webots-output.txt"
+    error_path = log_dir / "webots-error.txt"
+    launcher_path = log_dir / "launcher-output.txt"
     telemetry_path = log_dir / "telemetry.csv"
     marker_path = log_dir / "smoke_test_ok.json"
     run_manifest_path = log_dir / "run_manifest.json"
@@ -556,52 +570,81 @@ def _run_scenario_once(scenario: Scenario, log_dir: Path) -> Result:
 
     port = available_port()
     command = [
-        str(WEBOTS),
-        "--batch",
-        "--no-rendering",
-        "--mode=fast",
-        f"--port={port}",
-        "--stdout",
+        "/usr/bin/open",
+        "-F",
+        "-g",
+        "-j",
+        "-n",
+        "-a",
+        str(WEBOTS_APP),
+        "-o",
+        str(output_path),
         "--stderr",
-        str(WORLD),
+        str(error_path),
     ]
-    with output_path.open("x", encoding="utf-8") as output:
+    launch_environment = {
+        name: value
+        for name, value in environment.items()
+        if name.startswith("DREAM_MODE_")
+        or name in {
+            "PYTHONDONTWRITEBYTECODE",
+            "QT_MAC_DISABLE_FOREGROUND_APPLICATION_TRANSFORM",
+        }
+    }
+    for name, value in sorted(launch_environment.items()):
+        command.extend(["--env", f"{name}={value}"])
+    command.extend(
+        [
+            "--args",
+            "--batch",
+            "--no-rendering",
+            "--mode=fast",
+            f"--port={port}",
+            "--stdout",
+            "--stderr",
+            str(WORLD),
+        ]
+    )
+    with launcher_path.open("x", encoding="utf-8") as launcher_output:
         try:
-            process = subprocess.Popen(
+            launch = subprocess.run(
                 command,
                 cwd=PROJECT_ROOT,
                 env=environment,
-                stdout=output,
+                stdout=launcher_output,
                 stderr=subprocess.STDOUT,
-                start_new_session=True,
+                check=False,
+                timeout=8,
             )
-        except OSError as error:
+        except (OSError, subprocess.TimeoutExpired) as error:
             raise WebotsStartupError(f"could not launch Webots: {error}") from error
-        started = False
-        launch_time = time.monotonic()
-        while True:
-            return_code = process.poll()
-            if return_code is not None:
-                break
-            started = started or run_manifest_path.is_file()
-            elapsed = time.monotonic() - launch_time
-            if not started and elapsed >= 12.0:
-                terminate_test_instance(process)
-                raise WebotsStartupError("controller did not start within 12 seconds")
-            if elapsed >= 35.0:
-                terminate_test_instance(process)
-                if marker_path.is_file() and telemetry_path.is_file():
-                    return_code = 0
-                    break
-                raise RuntimeError("simulation timed out after 35 seconds")
-            time.sleep(0.05)
-    if return_code != 0:
-        if not run_manifest_path.is_file():
+    if launch.returncode != 0:
+        raise WebotsStartupError(
+            f"macOS launcher exited {launch.returncode}; see {launcher_path}"
+        )
+
+    seen_instance = False
+    launch_time = time.monotonic()
+    while not marker_path.is_file():
+        active_pids = webots_instance_pids(port)
+        seen_instance = seen_instance or bool(active_pids)
+        elapsed = time.monotonic() - launch_time
+        if seen_instance and not active_pids:
             raise WebotsStartupError(
-                f"Webots exited {return_code} before controller startup; "
-                f"see {output_path}"
+                f"Webots exited before controller completion; see {output_path}"
             )
-        raise RuntimeError(f"Webots exited {return_code}; see {output_path}")
+        if not seen_instance and elapsed >= 12.0:
+            terminate_test_instance(port)
+            raise WebotsStartupError("controller did not start within 12 seconds")
+        if elapsed >= 35.0:
+            terminate_test_instance(port)
+            raise RuntimeError("simulation timed out after 35 seconds")
+        time.sleep(0.05)
+
+    exit_deadline = time.monotonic() + 5.0
+    while time.monotonic() < exit_deadline and webots_instance_pids(port):
+        time.sleep(0.05)
+    terminate_test_instance(port)
 
     if (
         not telemetry_path.is_file()
