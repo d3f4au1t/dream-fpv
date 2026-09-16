@@ -1,147 +1,180 @@
-# Predictive FPV research simulator
+# Dream FPV
 
-This is the first programmable simulator for the **Dream Mode** project. It combines a symmetric micro quad, a purpose-built turning FPV practice course, synchronized sensors, configurable manual control, and timestamped telemetry.
+Dream FPV is a Webots-based FPV simulator for developing and testing predictive-flight displays. It includes an acro quad model, a technical practice course, synchronized RGB/depth capture, controller input, recovery logic, and timestamped telemetry.
 
-The current course, controller mapping, camera, physics settings, and experiment zones are frozen as **Experimental Apparatus v1.0.0**. See [the apparatus record](docs/APPARATUS_V1.md) for its integrity rules, calibration status, and known validity limits.
+The Phase 1 baseline is frozen as `apparatus-v1.0.0`. The tagged build passed the startup smoke test and all 72 flight-dynamics acceptance scenarios. See [the apparatus record](docs/APPARATUS_V1.md) and [validation summary](validation/apparatus-v1.0.0.json) for the exact configuration and test results.
 
-## Installed software
+This project is a research simulator, not a validated digital twin of a physical aircraft.
 
-- Webots R2025a: `/Applications/Webots.app`
-- Python 3.12: `/Library/Frameworks/Python.framework/Versions/3.12/bin/python3`
-- Project Python environment: `.venv/`
+## Requirements
 
-## Start the simulator
+- Webots R2025a
+- Python 3.12
+- A Python environment with the packages in `requirements.txt`
 
-From Terminal:
+The current launch and validation scripts target macOS and expect Webots at `/Applications/Webots.app`. The tested environment is macOS 26.3, Webots R2025a, and Python 3.12.4.
+
+Other platforms can open `worlds/dream_mode_research.wbt` directly in Webots. Update the Python command in `controllers/dream_mode_controller/runtime.ini` to point to the platform's virtual-environment interpreter. The macOS test runners have not yet been ported to Windows or Linux.
+
+## Quick start
+
+Clone the repository and install the controller dependency:
 
 ```bash
-cd /path/to/dream-fpv
+git clone https://github.com/d3f4au1t/dream-fpv.git
+cd dream-fpv
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+```
+
+Set `COMMAND` in `controllers/dream_mode_controller/runtime.ini` to the absolute path of the environment's Python executable. On macOS, it will normally be:
+
+```ini
+[python]
+COMMAND = /absolute/path/to/dream-fpv/.venv/bin/python3
+```
+
+Start the simulator:
+
+```bash
 ./scripts/run_webots.sh
 ```
 
-Or open `worlds/dream_mode_research.wbt` from Webots.
+You can also open `worlds/dream_mode_research.wbt` from Webots.
 
-The main Webots view is the drone's mounted FPV camera: 120° field of view, 22° uptilt, and no tracking-camera lag. A matching 480×270 RGB sensor and 320×180 depth sensor capture one synchronized startup pair and then switch off to preserve frame rate. Flight physics and pilot input run every 8 ms. Set `DREAM_MODE_CONTINUOUS_SENSORS=1` before launch only when an experiment needs live sensor sampling.
+The main view is mounted to the aircraft and matches the research camera: 120° horizontal field of view with 22° uptilt. Flight control runs at 125 Hz. The RGB and depth sensors save one synchronized startup pair, then disable themselves to reduce rendering load. Set `DREAM_MODE_CONTINUOUS_SENSORS=1` before launch when a run needs continuous sampling.
 
-## Course
+## Input
 
-The route is about 81 metres long across a 50-by-30-metre field. Launch down the six-metre opening straight through the large orange gate, break right around the first blue block, and line up with the angled yellow checkpoint. A broad three-pylon S-section leads into the cyan over-under bar. From there, take the long diagonal to the raised green gate and climb into the high, tilted orange gravity gate. Drop through its horizontal opening, set up for the lower-left opening of the magenta three-opening reverse-L, then take the long diagonal to the blue double gate tower. Fly its upper opening, orbit the separate blue pylon, return through the lower opening, and turn back through the angled purple finish gate. The purple landing pad sits two metres beyond it. The transfer sections alternate between open 6–12 metre runs and compact technical combinations, and every wall, frame, pylon, bar, and obstacle has matching collision geometry.
+Manual input is available through the keyboard or a supported HID controller adapter.
 
-## Controls
+### Keyboard
 
-The controller automatically prefers a connected joystick. Without one, use:
-
-| Action | Keyboard |
+| Action | Key |
 |---|---|
 | Pitch forward/back | Up / Down |
 | Roll left/right | Left / Right |
 | Yaw left/right | A / D |
 | Increase/decrease throttle | W / S |
-| Reset throttle to hover | Space |
+| Set throttle to the hover reference | Space |
 | Emergency motor stop | Q |
-| Arm again after emergency stop | E, with throttle fully low |
+| Arm after an emergency stop | E with throttle low |
 
-Roll, pitch, and yaw use **acro/rate behavior** with the exact legacy Betaflight rate settings shown in the reference: roll/pitch 1.25 RC Rate, 0.68 Super Rate, 0.22 Expo (781.25 degrees/second); yaw 1.25 RC Rate, 0.55 Super Rate, 0.28 Expo (555.56 degrees/second). Returning a stick to center stops rotation without leveling the aircraft.
+Set `DREAM_MODE_DISABLE_JOYSTICK=1` before launch to force keyboard input.
 
-Throttle directly commands motor thrust, as it does in an FPV quad. There is no altitude hold: raising throttle adds thrust and lowering it removes thrust. The model is 198 g with 2.5-inch props, 5000 KV motors, 4S power, about 32% hover stick, and a 5.15:1 static thrust-to-weight anchor. After every simulator reset, move throttle fully down once to arm, then raise it gradually. Motor corrections are mixed as thrust instead of rotor speed, preserving attitude authority at high and low throttle in an Airmode-like way. Once the craft has settled on the floor, zero-throttle attitude commands are suppressed so it cannot thrash or launch from a crash.
+### External controllers
 
-Crossing the course boundary, entering an invalid physics state, or remaining stuck on the ground beyond 75° of tilt returns the craft upright to its start and disarms it. Center roll, pitch, and yaw and hold throttle fully low for 0.15 seconds to rearm after that reset; this prevents a maneuver held during the teleport from launching the craft sideways. An input fault still requires the stronger above-10%-then-low gesture from the same reconnected source. Keyboard flight keys are ignored while the Apex is connected, so an accidental key press cannot replace radio throttle.
+Controller support has two parts:
 
-## Apex T19 setup
+1. Device discovery and HID report decoding in `dream_mode_controller.py`.
+2. Axis indexes, inversion, range, and deadzone in `config/controller.json`.
 
-1. Put the T19 in joystick/simulator mode.
-2. Connect it by USB before starting Webots.
-3. Start this world and read the Webots console. It reports the controller name and number of axes.
-4. If the channels are wrong, edit `config/controller.json`.
+Do not assume two USB radios or gamepads use the same HID report layout. A new controller may need a device matcher and report decoder before its axes can be configured. The adapter intentionally ignores unknown HID devices instead of guessing and sending unsafe commands to the flight model.
 
-The tested Mode 2 mapping is axes 0–3 for roll, pitch, throttle, and yaw. Roll, pitch, and yaw are inverted in the configuration; throttle is not. This is the mapping confirmed with this Apex T19, but re-check it after radio firmware changes or recalibration and before collecting experiment data.
+For a Mode 2 controller, verify these channels before flying:
 
-### If one stick direction does not respond
+| Stick movement | Command |
+|---|---|
+| Left vertical | Throttle |
+| Left horizontal | Yaw |
+| Right vertical | Pitch |
+| Right horizontal | Roll |
 
-The T19 manual gives this recalibration sequence:
+The default Phase 1 mapping is roll, pitch, throttle, and yaw on axes 0–3. Roll, pitch, and yaw are inverted; throttle is not. Treat that as a reference profile, not a universal controller layout.
 
-1. Connect the controller to the computer with USB-C.
-2. Put both sticks at their centers. For Mode 2, manually move the left throttle stick to the middle first.
-3. Hold **FN + MODE** until the indicator flashes quickly. This records the stick centers.
-4. Wait for the indicator to flash slowly, then move **both sticks** gently through their full up, down, left, and right limits.
-5. Stop when the indicator changes to its breathing-light pattern, then reset the Webots simulation.
+The currently shipped HID matcher recognizes the controller used to validate apparatus v1.0.0. Its calibration record remains under `config/` for reproducibility. Supporting another controller means validating its identity, report format, endpoints, center positions, mapping, and polarity before collecting research data.
 
-For Mode 2, the expected channels are left vertical = throttle, left horizontal = yaw, right vertical = pitch, and right horizontal = roll. If yaw remains fixed after calibration, use **A / D** as the temporary keyboard yaw control while the T19 USB channel is diagnosed.
+When a supported external controller is active, keyboard flight axes and throttle are ignored. Disconnect the device or launch with `DREAM_MODE_DISABLE_JOYSTICK=1` to use the keyboard.
 
-On macOS 26, Webots R2025a's built-in joystick enumerator crashes inside its OIS HID library, while SDL only captures the T19's startup state in a background controller process. This project therefore polls the T19 directly through HIDAPI and does not enable either faulty path. This workaround affects only pilot input; simulation and sensor timestamps still come from Webots.
+## Flight behavior
 
-## Generated data
+The aircraft uses acro/rate control. Centering roll, pitch, or yaw stops rotation; it does not level the aircraft.
 
-Each run creates `logs/<UTC timestamp>/` containing:
+The frozen rate profile is:
 
-- `run_manifest.json`: apparatus version, locked-file hashes, explicit controller-config digest, run fingerprint, declared and live-verified random seed, tested and actual Webots versions, effective timing, active Dream Mode overrides, Git state, zone mapping, and configuration snapshot.
-- `input_device.json`: the first non-sensitive Apex T19 HID identity detected during the run.
-- `input_device_events.jsonl`: append-only connection history, preserving later reconnects or interface changes without replacing the first identity.
-- `telemetry.csv` (then `telemetry_001.csv`, and so on): control-step and host timestamps, pose, velocity, IMU, pilot commands, requested rates, motor targets, input/failsafe state, raw joystick axes, recovery count, and collision state. New runs are capped at four 64 MiB segments so a forgotten session cannot fill the disk.
-- `rgb_initial.png`: the first RGB observation.
-- `depth_initial.png`: a viewable depth preview.
-- `depth_initial.f32`: the same first depth observation as native-endian float32 metres.
-- `depth_initial.json`: width, height, units, encoding, and camera parameters for the raw depth file.
+| Axis | RC Rate | Super Rate | Expo | Maximum rate |
+|---|---:|---:|---:|---:|
+| Roll | 1.25 | 0.68 | 0.22 | 781.25°/s |
+| Pitch | 1.25 | 0.68 | 0.22 | 781.25°/s |
+| Yaw | 1.25 | 0.55 | 0.28 | 555.56°/s |
 
-The first RGB and depth frames share the timestamp recorded in `depth_initial.json`; both sensors then stop unless continuous sampling was explicitly enabled. Every telemetry row also records apparatus version 1.0.0, deterministic seed 1907, and the current numeric course-zone ID. Preserve the complete run directory because the zone-name mapping and cryptographic fingerprints live in `run_manifest.json`. Continuous image recording and outage emulation are the next milestones; they are intentionally not mixed into installation validation.
+Throttle commands motor thrust directly; there is no altitude hold. The reference model is a 198 g, 2.5-inch, 4S quad with 5000 KV motors and an approximately 32% hover command.
 
-## Verify the setup
+Move throttle fully low after a simulator reset to arm. Boundary exits, invalid physics, and a settled inverted crash return the aircraft to the start and disarm it. After recovery, center the attitude sticks and hold throttle low for 0.15 seconds. Input loss requires a deliberate above-10%-then-low throttle cycle from the reconnected source.
 
-Run the Python unit tests:
+## Course
 
-```bash
-python3 -m unittest discover -s tests -v
-```
+The course covers roughly 81 metres inside a 50 × 30 metre arena. It mixes open transfer sections with tighter combinations:
 
-Verify the frozen apparatus hashes and zone schema without opening Webots:
+- conventional and angled gates;
+- slalom pylons;
+- over-under and raised gates;
+- a tilted gravity gate;
+- a three-opening reverse-L;
+- a stacked double-gate tower and orbit pylon;
+- a return turn, finish gate, and landing pad.
+
+Visible course structures have matching collision geometry. Spatial zone IDs label the major sections for telemetry, but they do not by themselves prove that a gate was crossed in the correct direction.
+
+## Run data
+
+Each run creates `logs/<UTC timestamp>/` with:
+
+- `run_manifest.json` — apparatus version, file hashes, controller-config hash, run fingerprint, seed, runtime versions, active overrides, Git state, course zones, and the effective configuration;
+- `input_device.json` — the first non-sensitive HID identity detected during the run;
+- `input_device_events.jsonl` — append-only controller connection history;
+- `telemetry.csv` and rotated segments — timestamps, pose, velocity, IMU, commands, rate targets, motor outputs, input/failsafe state, raw axes, recovery count, collision state, and course zone;
+- `rgb_initial.png` — initial RGB observation;
+- `depth_initial.png` — viewable initial depth image;
+- `depth_initial.f32` — initial depth values as native-endian float32 metres;
+- `depth_initial.json` — dimensions, range, encoding, camera parameters, and provenance for the depth data.
+
+Keep the complete run directory together. The CSV relies on its manifest for zone names and cryptographic provenance.
+
+## Verification
+
+Run the non-GUI checks:
 
 ```bash
 ./scripts/verify_apparatus.py
+python3 -m unittest discover -s tests -v
 ```
 
-Run a short headless simulator smoke test:
+Run the startup smoke test:
 
 ```bash
 ./scripts/smoke_test.sh
 ```
 
-The smoke test runs invisibly in the background, uses a free network port, times out safely, and exits after 6.4 simulated seconds. It checks the controller, pose, IMU, takeoff thrust, rate damping, telemetry schema and timing, PNG validity and dimensions, and raw depth metadata and byte count.
-
-Run the full flight-dynamics acceptance suite:
+Run the full 72-scenario flight-dynamics suite:
 
 ```bash
 ./scripts/flight_dynamics_test.py
 ```
 
-It launches isolated, headless Webots instances and checks direction, rates, response and braking time, reversals, Acro attitude retention, mixed inputs, throttle range, arming, landing, recovery, collision survival, signal-loss and emergency-stop latches, invalid re-arm timing, and deterministic stress behavior. The macOS runners use non-foreground mode and never minimize the user's current window.
+The simulator tests launch hidden Webots instances on macOS. They do not minimize or activate the user's current window.
 
-## Project structure
+## Repository layout
 
 ```text
-config/controller.json
-config/apparatus_v1.json
-config/apex_t19_calibration_v1.json
-config/course_zones.json
+config/                         frozen apparatus, controls, zones, calibration
 controllers/dream_mode_controller/
-  apparatus.py
-  dream_mode_controller.py
-  input_mapping.py
-  runtime.ini
-protos/FpvResearchQuad.proto
-requirements.txt
-scripts/
-  run_webots.sh
-  flight_dynamics_test.py
-  smoke_test.sh
-  verify_apparatus.py
-tests/test_controller_config.py
-tests/test_controller_failsafe.py
-tests/test_input_mapping.py
-tests/test_world_layout.py
-tests/test_apparatus_freeze.py
-worlds/dream_mode_research.wbt
+                                Webots controller and input mapping
+docs/APPARATUS_V1.md            Phase 1 apparatus specification
+protos/FpvResearchQuad.proto    aircraft model
+scripts/                        launcher and validation tools
+tests/                          non-GUI unit and layout tests
+validation/                     signed-off acceptance summaries
+worlds/dream_mode_research.wbt  course and simulator world
 ```
 
-## Current research boundary
+## Known limitations
 
-Apparatus v1.0.0 is suitable for engineering validation of the control and data path. It is not yet a physically validated real-drone model or ready for a human-subject experiment. The airframe still inherits approximate Crazyflie coefficients; its fast Webots rotor setting is a simulator response parameter, not a measured motor torque. Airframe system identification, continuous image recording, outage conditions, predictive display, uncertainty cues, randomized protocol, and the pilot-safety termination rule remain future milestones.
+- The physical coefficients have not been identified from measured airframe data.
+- Continuous image recording, outage injection, predictive display rendering, and uncertainty cues are not part of Phase 1.
+- The current direct-HID adapter does not automatically support arbitrary controllers.
+- The launcher and end-to-end validation scripts are macOS-specific.
+- External Webots mesh assets are pinned to R2025a URLs but are not vendored in this repository.
+
+Do not use simulator results to claim a safe real-world prediction horizon without separate physical validation.
