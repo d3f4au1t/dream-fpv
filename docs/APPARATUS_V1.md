@@ -70,8 +70,9 @@ The controller was not connected when v1.0.0 was frozen, so its USB VID/PID,
 firmware revision, and measured raw minimum/center/maximum values are not part
 of this version. Before formal participant data collection, record those values
 and verify neutral positions fall inside the configured 2% deadzone. A connected
-device's non-sensitive HID identity is saved as `input_device.json` in its run
-directory.
+device's first non-sensitive HID identity is saved as `input_device.json` in its
+run directory. Every later reconnect is appended to
+`input_device_events.jsonl` without replacing that first record.
 
 ## Experimental course zones
 
@@ -100,10 +101,14 @@ records:
 
 - apparatus identity, version, manifest digest, and locked-file digests;
 - one deterministic run fingerprint;
-- fixed seed and effective sensor/telemetry periods;
+- the declared seed, its live `WorldInfo` verification, and effective
+  sensor/telemetry periods;
 - home pose and recovery/sensor modes;
 - all active `DREAM_MODE_*` overrides except the output path;
-- controller and course-zone configuration snapshots;
+- controller and course-zone configuration snapshots plus an explicit
+  controller-config SHA-256 digest;
+- the tested Webots version and the version detected from the installed
+  runtime;
 - Git commit and dirty-state information when available.
 
 Telemetry repeats the numeric apparatus version, seed, and current course-zone
@@ -112,7 +117,8 @@ fingerprint. The complete run directory must remain together; a CSV separated
 from its manifest is not a fully attributable research record.
 
 Configured log directories may contain a test runner's console file, but the
-controller refuses to overwrite any prior controller-owned artifact.
+controller refuses to overwrite any prior controller-owned artifact, including
+rotated telemetry segments and smoke-test markers.
 
 ## Safety and known validity boundary
 
@@ -143,6 +149,6 @@ controller refuses to overwrite any prior controller-owned artifact.
 - The validation summary is stored under `validation/` and the commit is tagged
   `apparatus-v1.0.0`.
 
-Long Webots validation runs can claim macOS focus. They must not be launched
-unattended while the computer is in use; unit and integrity tests are safe to run
-without opening simulator windows.
+The validation runners use Webots' headless, non-foreground macOS mode and do
+not minimize the user's current window. Unit and integrity tests never open the
+simulator.

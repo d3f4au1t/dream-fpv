@@ -74,8 +74,9 @@ On macOS 26, Webots R2025a's built-in joystick enumerator crashes inside its OIS
 
 Each run creates `logs/<UTC timestamp>/` containing:
 
-- `run_manifest.json`: apparatus version, locked-file hashes, run fingerprint, random seed, effective timing, active Dream Mode overrides, Git state, zone mapping, and configuration snapshot.
-- `input_device.json`: non-sensitive HID identity when an Apex T19 is detected during the run.
+- `run_manifest.json`: apparatus version, locked-file hashes, explicit controller-config digest, run fingerprint, declared and live-verified random seed, tested and actual Webots versions, effective timing, active Dream Mode overrides, Git state, zone mapping, and configuration snapshot.
+- `input_device.json`: the first non-sensitive Apex T19 HID identity detected during the run.
+- `input_device_events.jsonl`: append-only connection history, preserving later reconnects or interface changes without replacing the first identity.
 - `telemetry.csv` (then `telemetry_001.csv`, and so on): control-step and host timestamps, pose, velocity, IMU, pilot commands, requested rates, motor targets, input/failsafe state, raw joystick axes, recovery count, and collision state. New runs are capped at four 64 MiB segments so a forgotten session cannot fill the disk.
 - `rgb_initial.png`: the first RGB observation.
 - `depth_initial.png`: a viewable depth preview.
@@ -112,7 +113,7 @@ Run the full flight-dynamics acceptance suite:
 ./scripts/flight_dynamics_test.py
 ```
 
-It launches isolated Webots instances and checks direction, rates, response and braking time, reversals, Acro attitude retention, mixed inputs, throttle range, arming, landing, recovery, collision survival, signal-loss and emergency-stop latches, invalid re-arm timing, and deterministic stress behavior. On macOS those simulator launches can temporarily claim focus, so do not start the full suite while actively using the desktop.
+It launches isolated, headless Webots instances and checks direction, rates, response and braking time, reversals, Acro attitude retention, mixed inputs, throttle range, arming, landing, recovery, collision survival, signal-loss and emergency-stop latches, invalid re-arm timing, and deterministic stress behavior. The macOS runners use non-foreground mode and never minimize the user's current window.
 
 ## Project structure
 
