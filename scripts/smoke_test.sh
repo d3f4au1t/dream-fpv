@@ -46,7 +46,7 @@ DREAM_MODE_BYPASS_ARMING=1 \
 DREAM_MODE_DISABLE_JOYSTICK=1 \
 DREAM_MODE_LOG_DIR="$smoke_dir/log" \
 PYTHONDONTWRITEBYTECODE=1 \
-  "$webots_bin" --batch --minimize --no-rendering --mode=fast \
+  "$webots_bin" --batch --no-rendering --mode=fast \
   --port="$port" --stdout --stderr "$world_path" \
   >"$output_file" 2>"$error_file" &
 webots_pid=$!

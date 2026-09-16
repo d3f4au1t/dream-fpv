@@ -551,7 +551,6 @@ def run_scenario(scenario: Scenario, index: int, run_root: Path) -> Result:
     command = [
         str(WEBOTS),
         "--batch",
-        "--minimize",
         "--no-rendering",
         "--mode=fast",
         f"--port={port}",
