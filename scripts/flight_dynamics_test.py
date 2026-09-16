@@ -18,6 +18,7 @@ import signal
 import socket
 import subprocess
 import sys
+import time
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -505,10 +506,15 @@ def terminate_test_instance(process: subprocess.Popen) -> None:
     process.wait(timeout=3)
 
 
-def run_scenario(scenario: Scenario, index: int, run_root: Path) -> Result:
-    log_dir = run_root / scenario.name
-    log_dir.mkdir(parents=True, exist_ok=True)
+class WebotsStartupError(RuntimeError):
+    """A retryable failure before the controller created its run manifest."""
+
+
+def _run_scenario_once(scenario: Scenario, log_dir: Path) -> Result:
     output_path = log_dir / "webots-output.txt"
+    telemetry_path = log_dir / "telemetry.csv"
+    marker_path = log_dir / "smoke_test_ok.json"
+    run_manifest_path = log_dir / "run_manifest.json"
     steps = math.ceil(scenario.duration_s / TIME_STEP_SECONDS)
     environment = os.environ.copy()
     for name in tuple(environment):
@@ -559,26 +565,44 @@ def run_scenario(scenario: Scenario, index: int, run_root: Path) -> Result:
         "--stderr",
         str(WORLD),
     ]
-    with output_path.open("w", encoding="utf-8") as output:
-        process = subprocess.Popen(
-            command,
-            cwd=PROJECT_ROOT,
-            env=environment,
-            stdout=output,
-            stderr=subprocess.STDOUT,
-            start_new_session=True,
-        )
+    with output_path.open("x", encoding="utf-8") as output:
         try:
-            return_code = process.wait(timeout=35)
-        except subprocess.TimeoutExpired as error:
-            terminate_test_instance(process)
-            raise RuntimeError(f"timed out after {error.timeout:.0f} seconds") from error
+            process = subprocess.Popen(
+                command,
+                cwd=PROJECT_ROOT,
+                env=environment,
+                stdout=output,
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
+            )
+        except OSError as error:
+            raise WebotsStartupError(f"could not launch Webots: {error}") from error
+        started = False
+        launch_time = time.monotonic()
+        while True:
+            return_code = process.poll()
+            if return_code is not None:
+                break
+            started = started or run_manifest_path.is_file()
+            elapsed = time.monotonic() - launch_time
+            if not started and elapsed >= 12.0:
+                terminate_test_instance(process)
+                raise WebotsStartupError("controller did not start within 12 seconds")
+            if elapsed >= 35.0:
+                terminate_test_instance(process)
+                if marker_path.is_file() and telemetry_path.is_file():
+                    return_code = 0
+                    break
+                raise RuntimeError("simulation timed out after 35 seconds")
+            time.sleep(0.05)
     if return_code != 0:
+        if not run_manifest_path.is_file():
+            raise WebotsStartupError(
+                f"Webots exited {return_code} before controller startup; "
+                f"see {output_path}"
+            )
         raise RuntimeError(f"Webots exited {return_code}; see {output_path}")
 
-    telemetry_path = log_dir / "telemetry.csv"
-    marker_path = log_dir / "smoke_test_ok.json"
-    run_manifest_path = log_dir / "run_manifest.json"
     if (
         not telemetry_path.is_file()
         or not marker_path.is_file()
@@ -658,6 +682,28 @@ def run_scenario(scenario: Scenario, index: int, run_root: Path) -> Result:
         rows=rows,
         log_dir=log_dir,
         run_manifest=run_manifest,
+    )
+
+
+def run_scenario(scenario: Scenario, index: int, run_root: Path) -> Result:
+    # macOS may not fully release the previous short-lived application before
+    # the next one starts. A small gap plus bounded startup retries prevents
+    # LaunchServices/Qt churn from turning into false dynamics failures.
+    if index:
+        time.sleep(0.5)
+    startup_errors = []
+    for attempt in range(1, 4):
+        suffix = "" if attempt == 1 else f"__retry_{attempt}"
+        log_dir = run_root / f"{scenario.name}{suffix}"
+        log_dir.mkdir(parents=True, exist_ok=False)
+        try:
+            return _run_scenario_once(scenario, log_dir)
+        except WebotsStartupError as error:
+            startup_errors.append(str(error))
+            if attempt < 3:
+                time.sleep(float(attempt))
+    raise RuntimeError(
+        "Webots startup failed after 3 attempts: " + " | ".join(startup_errors)
     )
 
 
