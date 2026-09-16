@@ -58,6 +58,11 @@ class DreamModeController(Supervisor):
             self.apparatus_manifest_sha256,
         ) = load_and_verify_apparatus(self.project_root, self.config)
         self.run_seed = int(self.apparatus["random_seed"])
+        self.live_random_seed = self._verify_live_random_seed()
+        self.controller_config_sha256 = self.locked_file_hashes[
+            "config/controller.json"
+        ]
+        self.webots_actual_version = self._read_webots_version()
         self.apparatus_version_parts = tuple(
             int(part) for part in self.apparatus["version"].split(".")
         )
@@ -229,6 +234,9 @@ class DreamModeController(Supervisor):
         self.telemetry_segment_index = 0
         self.telemetry_file = None
         self.telemetry = None
+        # Capture a controller that is already connected at process start so
+        # the run manifest does not misleadingly report a null start device.
+        self._refresh_joystick()
         self.run_fingerprint_sha256 = self._build_run_fingerprint()
         self._write_run_manifest()
         self._open_telemetry_segment()
@@ -247,6 +255,44 @@ class DreamModeController(Supervisor):
     def _optional_float_env(name: str) -> float | None:
         value = os.environ.get(name)
         return float(value) if value is not None else None
+
+    def _verify_live_random_seed(self) -> int:
+        world_info = self.getFromDef("WORLD_INFO")
+        if world_info is None:
+            raise RuntimeError('Required Webots node "WORLD_INFO" is missing')
+        seed_field = world_info.getField("randomSeed")
+        if seed_field is None:
+            raise RuntimeError('WORLD_INFO field "randomSeed" is missing')
+        live_seed = int(seed_field.getSFInt32())
+        if live_seed != self.run_seed:
+            raise RuntimeError(
+                "Live WorldInfo randomSeed does not match the frozen apparatus: "
+                f"{live_seed} != {self.run_seed}"
+            )
+        return live_seed
+
+    @staticmethod
+    def _read_webots_version() -> str | None:
+        candidates = []
+        webots_home = os.environ.get("WEBOTS_HOME")
+        if webots_home:
+            candidates.extend(
+                [
+                    Path(webots_home) / "resources" / "version.txt",
+                    Path(webots_home) / "Resources" / "version.txt",
+                ]
+            )
+        candidates.append(
+            Path("/Applications/Webots.app/Contents/Resources/version.txt")
+        )
+        for path in candidates:
+            try:
+                version = path.read_text(encoding="utf-8").strip()
+            except OSError:
+                continue
+            if version:
+                return version
+        return None
 
     @staticmethod
     def _load_test_command_sequence() -> list[tuple[float, tuple[float, ...]]]:
@@ -296,13 +342,20 @@ class DreamModeController(Supervisor):
         controller_artifacts = (
             "run_manifest.json",
             "input_device.json",
+            "input_device_events.jsonl",
             "telemetry.csv",
             "rgb_initial.png",
             "depth_initial.png",
             "depth_initial.f32",
             "depth_initial.json",
+            "smoke_test_ok.json",
         )
         existing = [name for name in controller_artifacts if (run_dir / name).exists()]
+        existing.extend(
+            path.name
+            for path in sorted(run_dir.glob("telemetry*.csv"))
+            if path.name not in existing
+        )
         if existing:
             raise FileExistsError(
                 f"Refusing to overwrite existing run artifacts in {run_dir}: "
@@ -329,7 +382,7 @@ class DreamModeController(Supervisor):
                 timeout=2,
             )
             status = subprocess.run(
-                ["git", "status", "--porcelain", "--untracked-files=no"],
+                ["git", "status", "--porcelain", "--untracked-files=all"],
                 cwd=self.project_root,
                 check=True,
                 capture_output=True,
@@ -355,6 +408,10 @@ class DreamModeController(Supervisor):
             "depth_period_ms": self.DEPTH_PERIOD_MS,
             "continuous_research_sensors": self.continuous_research_sensors,
             "recovery_enabled": self.recovery_enabled,
+            "home_translation_m": self.home_translation,
+            "home_rotation_axis_angle": self.home_rotation,
+            "controller_config_sha256": self.controller_config_sha256,
+            "webots_actual_version": self.webots_actual_version,
             "environment_overrides": self._dream_mode_overrides(),
         }
         return canonical_sha256(payload)
@@ -373,8 +430,10 @@ class DreamModeController(Supervisor):
             },
             "run_fingerprint_sha256": self.run_fingerprint_sha256,
             "random_seed": self.run_seed,
+            "controller_config_sha256": self.controller_config_sha256,
             "runtime": {
                 "webots_tested_version": self.apparatus["simulator"]["tested_version"],
+                "webots_actual_version": self.webots_actual_version,
                 "python_version": platform.python_version(),
                 "python_executable": sys.executable,
                 "basic_time_step_ms": self.time_step,
@@ -409,17 +468,20 @@ class DreamModeController(Supervisor):
             "connected_at_utc": datetime.now(timezone.utc).isoformat(),
             "device": self.joystick_identity,
         }
-        temporary = self.run_dir / ".input_device.json.tmp"
         destination = self.run_dir / "input_device.json"
-        with temporary.open("w", encoding="utf-8") as output:
-            json.dump(metadata, output, indent=2, sort_keys=True, allow_nan=False)
+        if not destination.exists():
+            with destination.open("x", encoding="utf-8") as output:
+                json.dump(metadata, output, indent=2, sort_keys=True, allow_nan=False)
+                output.write("\n")
+        event_path = self.run_dir / "input_device_events.jsonl"
+        with event_path.open("a", encoding="utf-8") as output:
+            json.dump(metadata, output, sort_keys=True, allow_nan=False)
             output.write("\n")
-        temporary.replace(destination)
 
     def _open_telemetry_segment(self) -> None:
         suffix = "" if self.telemetry_segment_index == 0 else f"_{self.telemetry_segment_index:03d}"
         path = self.run_dir / f"telemetry{suffix}.csv"
-        self.telemetry_file = path.open("w", newline="", encoding="utf-8")
+        self.telemetry_file = path.open("x", newline="", encoding="utf-8")
         self.telemetry = csv.DictWriter(
             self.telemetry_file,
             fieldnames=self._telemetry_fieldnames(),
@@ -1212,13 +1274,14 @@ class DreamModeController(Supervisor):
         self.depth.saveImage(str(self.run_dir / "depth_initial.png"), 100)
 
         depth_values = array("f", self.depth.getRangeImage())
-        with (self.run_dir / "depth_initial.f32").open("wb") as depth_file:
+        with (self.run_dir / "depth_initial.f32").open("xb") as depth_file:
             depth_values.tofile(depth_file)
         metadata = {
             "sim_time_s": sim_time,
             "apparatus_id": self.apparatus["apparatus_id"],
             "apparatus_version": self.apparatus["version"],
             "apparatus_manifest_sha256": self.apparatus_manifest_sha256,
+            "controller_config_sha256": self.controller_config_sha256,
             "run_fingerprint_sha256": self.run_fingerprint_sha256,
             "random_seed": self.run_seed,
             "width": self.depth.getWidth(),
@@ -1229,7 +1292,7 @@ class DreamModeController(Supervisor):
             "units": "metres",
             "encoding": "native-endian float32, row-major",
         }
-        with (self.run_dir / "depth_initial.json").open("w", encoding="utf-8") as file:
+        with (self.run_dir / "depth_initial.json").open("x", encoding="utf-8") as file:
             json.dump(metadata, file, indent=2)
             file.write("\n")
         self.captured_initial_frames = True
@@ -1440,6 +1503,7 @@ class DreamModeController(Supervisor):
                         "sim_time_s": self.getTime(),
                         "apparatus_id": self.apparatus["apparatus_id"],
                         "apparatus_version": self.apparatus["version"],
+                        "controller_config_sha256": self.controller_config_sha256,
                         "run_fingerprint_sha256": self.run_fingerprint_sha256,
                         "rgb_width": self.camera.getWidth(),
                         "rgb_height": self.camera.getHeight(),
@@ -1453,7 +1517,7 @@ class DreamModeController(Supervisor):
                         "max_motor_speed_rad_s": max(self.last_motor_speeds),
                     }
                     with (self.run_dir / "smoke_test_ok.json").open(
-                        "w", encoding="utf-8"
+                        "x", encoding="utf-8"
                     ) as marker_file:
                         json.dump(marker, marker_file, indent=2)
                         marker_file.write("\n")

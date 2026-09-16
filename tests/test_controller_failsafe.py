@@ -1,7 +1,9 @@
 import importlib.util
 import io
+import json
 from pathlib import Path
 import sys
+import tempfile
 import types
 import unittest
 from contextlib import redirect_stdout
@@ -85,6 +87,9 @@ class FakeField:
     def getSFFloat(self):
         return self.value
 
+    def getSFInt32(self):
+        return self.value
+
     def setSFVec3f(self, value):
         self.value = list(value)
 
@@ -111,6 +116,91 @@ class FakeNode:
 
 
 class ControllerFailsafeTests(unittest.TestCase):
+    def test_configured_run_directory_rejects_rotated_telemetry(self):
+        controller = DreamModeController.__new__(DreamModeController)
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            run_dir = Path(temporary_directory)
+            (run_dir / "telemetry_001.csv").write_text("prior run\n", encoding="utf-8")
+            with patch.dict(
+                CONTROLLER_MODULE.os.environ,
+                {"DREAM_MODE_LOG_DIR": str(run_dir)},
+                clear=False,
+            ):
+                with self.assertRaises(FileExistsError):
+                    controller._create_run_directory()
+
+    def test_telemetry_segments_use_exclusive_creation(self):
+        controller = DreamModeController.__new__(DreamModeController)
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            controller.run_dir = Path(temporary_directory)
+            controller.telemetry_segment_index = 0
+            (controller.run_dir / "telemetry.csv").write_text(
+                "prior run\n", encoding="utf-8"
+            )
+            with self.assertRaises(FileExistsError):
+                controller._open_telemetry_segment()
+
+    def test_run_fingerprint_includes_effective_home_pose(self):
+        controller = DreamModeController.__new__(DreamModeController)
+        controller.apparatus = {
+            "apparatus_id": "dream_fpv_webots",
+            "version": "1.0.0",
+        }
+        controller.apparatus_manifest_sha256 = "a" * 64
+        controller.locked_file_hashes = {"config/controller.json": "b" * 64}
+        controller.run_seed = 1907
+        controller.time_step = 8
+        controller.log_period_seconds = 0.04
+        controller.continuous_research_sensors = False
+        controller.recovery_enabled = True
+        controller.home_translation = [-7.0, 0.0, 0.03]
+        controller.home_rotation = [0.0, 0.0, 1.0, 0.0]
+        controller.controller_config_sha256 = "b" * 64
+        controller.webots_actual_version = "R2025a"
+        with patch.dict(CONTROLLER_MODULE.os.environ, {}, clear=True):
+            first = controller._build_run_fingerprint()
+            controller.home_translation = [-7.0, 0.0, 2.0]
+            second = controller._build_run_fingerprint()
+        self.assertNotEqual(first, second)
+
+    def test_live_seed_must_match_frozen_apparatus(self):
+        controller = DreamModeController.__new__(DreamModeController)
+        controller.run_seed = 1907
+        world_info = FakeNode({"randomSeed": 1907})
+        controller.getFromDef = lambda name: world_info if name == "WORLD_INFO" else None
+        self.assertEqual(controller._verify_live_random_seed(), 1907)
+        world_info.getField("randomSeed").value = 1908
+        with self.assertRaises(RuntimeError):
+            controller._verify_live_random_seed()
+
+    def test_device_metadata_preserves_first_identity_and_connection_history(self):
+        controller = DreamModeController.__new__(DreamModeController)
+        controller.apparatus = {
+            "apparatus_id": "dream_fpv_webots",
+            "version": "1.0.0",
+        }
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            controller.run_dir = Path(temporary_directory)
+            controller.joystick_identity = {"product": "APEX T19", "interface_number": 1}
+            controller._write_input_device_metadata()
+            controller.joystick_identity = {"product": "APEX T19", "interface_number": 2}
+            controller._write_input_device_metadata()
+
+            first = json.loads(
+                (controller.run_dir / "input_device.json").read_text(encoding="utf-8")
+            )
+            events = [
+                json.loads(line)
+                for line in (controller.run_dir / "input_device_events.jsonl")
+                .read_text(encoding="utf-8")
+                .splitlines()
+            ]
+        self.assertEqual(first["device"]["interface_number"], 1)
+        self.assertEqual(
+            [event["device"]["interface_number"] for event in events],
+            [1, 2],
+        )
+
     def test_short_hid_report_becomes_invalid_input(self):
         controller = DreamModeController.__new__(DreamModeController)
         controller._read_keyboard = lambda: ((0.0, 0.0, 0.0, 0.0), False)

@@ -48,7 +48,7 @@
     "config/controller.json": "8b7aee4596f3258f4a7987eefc71aa68953834753875627de39d2952db4e3b25",
     "config/course_zones.json": "7f2cb474bf63bea887715bd76294d73fd6ed101b46e82b1289a93e46eb8abea5",
     "config/apex_t19_calibration_v1.json": "065f0d5a55a42a3da875332a835a3238b7876df0aa6480a6470d87498be6630c",
-    "controllers/dream_mode_controller/dream_mode_controller.py": "cf5ba7ffbcbbac005cf902fcbdff028a5be88d74ab548d013c18d2d1fd62671a",
+    "controllers/dream_mode_controller/dream_mode_controller.py": "247818411773057d0c18a524fcc451f16b39b2fbbc6d75bcf2020ea53672c03f",
     "controllers/dream_mode_controller/input_mapping.py": "cf4d6cbf519f7ae5e1068997875072c27325c8f9305c71c77ec0f239c37f1fbf",
     "controllers/dream_mode_controller/apparatus.py": "0eb99b406b7d1961f9f7b831b31306542c1a2fc059d32f0a899b9ce1fc6c6892",
     "controllers/dream_mode_controller/runtime.ini": "bf78d1a644c1a533d7f9c04c963653e0e6a5e63c6611453c7d1f573625df8f4b",
