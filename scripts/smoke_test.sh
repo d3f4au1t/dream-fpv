@@ -79,6 +79,7 @@ if [[ ! -s "$smoke_dir/log/smoke_test_ok.json" ]]; then
 fi
 
 required_files=(
+  run_manifest.json
   telemetry.csv
   rgb_initial.png
   depth_initial.png
@@ -103,6 +104,7 @@ fi
 if ! python3 - \
   "$smoke_dir/log/smoke_test_ok.json" \
   "$project_dir/config/controller.json" \
+  "$smoke_dir/log/run_manifest.json" \
   "$smoke_dir/log/rgb_initial.png" \
   "$smoke_dir/log/depth_initial.png" \
   "$smoke_dir/log/depth_initial.f32" \
@@ -115,14 +117,26 @@ from pathlib import Path
 import struct
 import sys
 
-marker_path, config_path, rgb_path, depth_png_path, depth_raw_path, depth_metadata_path, telemetry_path = map(
+marker_path, config_path, run_manifest_path, rgb_path, depth_png_path, depth_raw_path, depth_metadata_path, telemetry_path = map(
     Path, sys.argv[1:]
 )
 
 with marker_path.open(encoding="utf-8") as marker_file:
     marker = json.load(marker_file)
 with config_path.open(encoding="utf-8") as config_file:
-    flight_profile = json.load(config_file)["flight_profile"]
+    controller_config = json.load(config_file)
+    flight_profile = controller_config["flight_profile"]
+with run_manifest_path.open(encoding="utf-8") as manifest_file:
+    run_manifest = json.load(manifest_file)
+
+apparatus = run_manifest.get("apparatus", {})
+if apparatus.get("id") != "dream_fpv_webots" or apparatus.get("version") != "1.0.0":
+    raise SystemExit(f"Unexpected apparatus identity: {apparatus}")
+fingerprint = run_manifest.get("run_fingerprint_sha256", "")
+if len(fingerprint) != 64 or any(character not in "0123456789abcdef" for character in fingerprint):
+    raise SystemExit("Run manifest has an invalid fingerprint")
+if marker.get("run_fingerprint_sha256") != fingerprint:
+    raise SystemExit("Smoke marker and run manifest fingerprints disagree")
 
 expected_rgb = (480, 270)
 expected_depth = (320, 180)
@@ -153,6 +167,8 @@ if depth_metadata.get("units") != "metres" or "float32" not in depth_metadata.ge
     raise SystemExit("Depth metadata units or encoding are incorrect")
 if not 0.0 < depth_metadata.get("min_range_m", 0.0) < depth_metadata.get("max_range_m", 0.0):
     raise SystemExit("Depth metadata range is invalid")
+if depth_metadata.get("run_fingerprint_sha256") != fingerprint:
+    raise SystemExit("Depth metadata and run manifest fingerprints disagree")
 expected_depth_bytes = expected_depth[0] * expected_depth[1] * 4
 if depth_raw_path.stat().st_size != expected_depth_bytes:
     raise SystemExit(
@@ -163,6 +179,11 @@ required_telemetry_fields = {
     "control_step",
     "sim_time_s",
     "host_monotonic_s",
+    "run_seed",
+    "apparatus_version_major",
+    "apparatus_version_minor",
+    "apparatus_version_patch",
+    "course_zone_id",
     "x_m",
     "y_m",
     "z_m",
@@ -190,6 +211,10 @@ with telemetry_path.open(newline="", encoding="utf-8") as telemetry_file:
     rows = list(reader)
 if len(rows) < 10:
     raise SystemExit(f"Telemetry contains too few data rows: {len(rows)}")
+valid_zone_ids = {0}
+valid_zone_ids.update(
+    int(zone["code"]) for zone in run_manifest["course_zones"]["zones"]
+)
 times = []
 for row_number, row in enumerate(rows, start=2):
     for field, encoded in row.items():
@@ -199,6 +224,8 @@ for row_number, row in enumerate(rows, start=2):
             raise SystemExit(f"Telemetry row {row_number} has invalid {field}") from error
         if not math.isfinite(value):
             raise SystemExit(f"Telemetry row {row_number} has non-finite {field}")
+    if int(float(row["course_zone_id"])) not in valid_zone_ids:
+        raise SystemExit(f"Telemetry row {row_number} has an unknown course zone")
     times.append(float(row["sim_time_s"]))
 for first, second in zip(times, times[1:]):
     gap = second - first

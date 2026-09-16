@@ -2,6 +2,8 @@
 
 This is the first programmable simulator for the **Dream Mode** project. It combines a symmetric micro quad, a purpose-built turning FPV practice course, synchronized sensors, configurable manual control, and timestamped telemetry.
 
+The current course, controller mapping, camera, physics settings, and experiment zones are frozen as **Experimental Apparatus v1.0.0**. See [the apparatus record](docs/APPARATUS_V1.md) for its integrity rules, calibration status, and known validity limits.
+
 ## Installed software
 
 - Webots R2025a: `/Applications/Webots.app`
@@ -13,7 +15,7 @@ This is the first programmable simulator for the **Dream Mode** project. It comb
 From Terminal:
 
 ```bash
-cd "/Users/bitdev/Documents/ChatGPT/Research"
+cd /path/to/dream-fpv
 ./scripts/run_webots.sh
 ```
 
@@ -72,13 +74,15 @@ On macOS 26, Webots R2025a's built-in joystick enumerator crashes inside its OIS
 
 Each run creates `logs/<UTC timestamp>/` containing:
 
+- `run_manifest.json`: apparatus version, locked-file hashes, run fingerprint, random seed, effective timing, active Dream Mode overrides, Git state, zone mapping, and configuration snapshot.
+- `input_device.json`: non-sensitive HID identity when an Apex T19 is detected during the run.
 - `telemetry.csv` (then `telemetry_001.csv`, and so on): control-step and host timestamps, pose, velocity, IMU, pilot commands, requested rates, motor targets, input/failsafe state, raw joystick axes, recovery count, and collision state. New runs are capped at four 64 MiB segments so a forgotten session cannot fill the disk.
 - `rgb_initial.png`: the first RGB observation.
 - `depth_initial.png`: a viewable depth preview.
 - `depth_initial.f32`: the same first depth observation as native-endian float32 metres.
 - `depth_initial.json`: width, height, units, encoding, and camera parameters for the raw depth file.
 
-The first RGB and depth frames share the timestamp recorded in `depth_initial.json`; both sensors then stop unless continuous sampling was explicitly enabled. Continuous image recording and outage emulation are the next milestones; they are intentionally not mixed into installation validation.
+The first RGB and depth frames share the timestamp recorded in `depth_initial.json`; both sensors then stop unless continuous sampling was explicitly enabled. Every telemetry row also records apparatus version 1.0.0, deterministic seed 1907, and the current numeric course-zone ID. Preserve the complete run directory because the zone-name mapping and cryptographic fingerprints live in `run_manifest.json`. Continuous image recording and outage emulation are the next milestones; they are intentionally not mixed into installation validation.
 
 ## Verify the setup
 
@@ -86,6 +90,12 @@ Run the Python unit tests:
 
 ```bash
 python3 -m unittest discover -s tests -v
+```
+
+Verify the frozen apparatus hashes and zone schema without opening Webots:
+
+```bash
+./scripts/verify_apparatus.py
 ```
 
 Run a short headless simulator smoke test:
@@ -102,13 +112,17 @@ Run the full flight-dynamics acceptance suite:
 ./scripts/flight_dynamics_test.py
 ```
 
-It launches isolated Webots instances without taking macOS focus and checks direction, rates, response and braking time, reversals, Acro attitude retention, mixed inputs, throttle range, arming, landing, recovery, collision survival, signal-loss and emergency-stop latches, invalid re-arm timing, and deterministic stress behavior.
+It launches isolated Webots instances and checks direction, rates, response and braking time, reversals, Acro attitude retention, mixed inputs, throttle range, arming, landing, recovery, collision survival, signal-loss and emergency-stop latches, invalid re-arm timing, and deterministic stress behavior. On macOS those simulator launches can temporarily claim focus, so do not start the full suite while actively using the desktop.
 
 ## Project structure
 
 ```text
 config/controller.json
+config/apparatus_v1.json
+config/apex_t19_calibration_v1.json
+config/course_zones.json
 controllers/dream_mode_controller/
+  apparatus.py
   dream_mode_controller.py
   input_mapping.py
   runtime.ini
@@ -118,13 +132,15 @@ scripts/
   run_webots.sh
   flight_dynamics_test.py
   smoke_test.sh
+  verify_apparatus.py
 tests/test_controller_config.py
 tests/test_controller_failsafe.py
 tests/test_input_mapping.py
 tests/test_world_layout.py
+tests/test_apparatus_freeze.py
 worlds/dream_mode_research.wbt
 ```
 
 ## Current research boundary
 
-This setup is suitable for engineering validation of the control and data path. It is not yet a physically validated real-drone model or ready for a human-subject experiment. The airframe still inherits approximate Crazyflie coefficients; its fast Webots rotor setting is a simulator response parameter, not a measured motor torque. Airframe system identification, continuous image recording, outage conditions, predictive display, uncertainty cues, randomized protocol, and the pilot-safety termination rule remain future milestones.
+Apparatus v1.0.0 is suitable for engineering validation of the control and data path. It is not yet a physically validated real-drone model or ready for a human-subject experiment. The airframe still inherits approximate Crazyflie coefficients; its fast Webots rotor setting is a simulator response parameter, not a measured motor torque. Airframe system identification, continuous image recording, outage conditions, predictive display, uncertainty cues, randomized protocol, and the pilot-safety termination rule remain future milestones.

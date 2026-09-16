@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "apparatus_id": "dream_fpv_webots",
+  "version": "1.0.0",
+  "status": "frozen",
+  "frozen_on": "2026-09-16",
+  "random_seed": 1907,
+  "course_zones_file": "config/course_zones.json",
+  "controller_calibration_file": "config/apex_t19_calibration_v1.json",
+  "simulator": {
+    "name": "Webots",
+    "tested_version": "R2025a",
+    "basic_time_step_ms": 8,
+    "tested_platform": "macOS 26.3 (25D125)",
+    "python_version": "3.12.4"
+  },
+  "timing": {
+    "rgb_period_ms": 16,
+    "depth_period_ms": 64,
+    "default_telemetry_period_ms": 40
+  },
+  "sensors": {
+    "camera_translation_m": [0.065, 0.0, 0.02],
+    "camera_rotation_axis_angle": [0.0, 1.0, 0.0, -0.3839724354387525],
+    "field_of_view_rad": 2.0943951,
+    "rgb_resolution": [480, 270],
+    "depth_resolution": [320, 180],
+    "depth_range_m": [0.05, 20.0]
+  },
+  "course": {
+    "nominal_route_length_m": 81.15,
+    "floor_size_m": [50.0, 30.0],
+    "recovery_inset_from_wall_face_m": 0.4
+  },
+  "calibration": {
+    "level": "simulator-reference-and-user-tuned",
+    "physical_digital_twin_validated": false,
+    "controller_mapping": "Apex T19 Mode 2 mapping and polarity confirmed by the user",
+    "limitations": [
+      "Motor, inertia, drag, propwash, and collision parameters have not been identified from the physical airframe.",
+      "The model must not be described as feeling exactly like, or predicting the dynamics of, the physical drone.",
+      "The controller VID, PID, firmware, and raw endpoint sweep must be recorded before formal participant trials."
+    ]
+  },
+  "locked_files": {
+    "worlds/dream_mode_research.wbt": "e9ff98d6ebf9f6b0d1630f144d58998558b6c623a35a482bb38418c7e42dbed3",
+    "protos/FpvResearchQuad.proto": "d23616a115cc0f40d0426b809c504113ebde4c001cbab9ff34235753291eadfd",
+    "config/controller.json": "8b7aee4596f3258f4a7987eefc71aa68953834753875627de39d2952db4e3b25",
+    "config/course_zones.json": "7f2cb474bf63bea887715bd76294d73fd6ed101b46e82b1289a93e46eb8abea5",
+    "config/apex_t19_calibration_v1.json": "065f0d5a55a42a3da875332a835a3238b7876df0aa6480a6470d87498be6630c",
+    "controllers/dream_mode_controller/dream_mode_controller.py": "cf5ba7ffbcbbac005cf902fcbdff028a5be88d74ab548d013c18d2d1fd62671a",
+    "controllers/dream_mode_controller/input_mapping.py": "cf4d6cbf519f7ae5e1068997875072c27325c8f9305c71c77ec0f239c37f1fbf",
+    "controllers/dream_mode_controller/apparatus.py": "0eb99b406b7d1961f9f7b831b31306542c1a2fc059d32f0a899b9ce1fc6c6892",
+    "controllers/dream_mode_controller/runtime.ini": "bf78d1a644c1a533d7f9c04c963653e0e6a5e63c6611453c7d1f573625df8f4b",
+    "requirements.txt": "6e78c6c5a61dbebf36f570a14685c795efcdb3d8bb6b6118b6aa78dd0aca54d4"
+  }
+}

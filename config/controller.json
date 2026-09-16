@@ -1,4 +1,6 @@
 {
+  "apparatus_manifest": "config/apparatus_v1.json",
+  "course_zones_file": "config/course_zones.json",
   "axis_range": 32767,
   "deadzone": 0.02,
   "joystick_stale_timeout_seconds": 0.25,

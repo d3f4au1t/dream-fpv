@@ -3,12 +3,13 @@
 
 EXTERNPROTO "../protos/FpvResearchQuad.proto"
 
-WorldInfo {
+DEF WORLD_INFO WorldInfo {
   info [
     "Programmable FPV practice course for uncertainty-aware predictive flight research."
     "The course combines conventional gates, slalom pylons, an over-under bar, a gravity gate, a reverse-L gate, a double gate tower, height changes, obstacles, and synchronized logging."
   ]
   title "Dream Mode FPV research simulator"
+  randomSeed 1907
   gravity 9.82
   basicTimeStep 8
   defaultDamping Damping {

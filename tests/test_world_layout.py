@@ -73,6 +73,10 @@ class WorldLayoutTests(unittest.TestCase):
         self.assertEqual(sizes[0], sizes[1])
         self.assertEqual(tuple(map(float, sizes[0])), (50.0, 30.0, 0.2))
 
+    def test_world_random_seed_is_frozen(self):
+        self.assertIn("DEF WORLD_INFO WorldInfo {", self.world)
+        self.assertIn("randomSeed 1907", self.world)
+
     def test_recovery_bounds_are_inside_visible_course(self):
         bounds = self.config["flight_profile"]["recovery_bounds"]
         floor_x, floor_y, _ = self.translation("floor")

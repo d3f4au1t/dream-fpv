@@ -72,6 +72,7 @@ class Result:
     scenario: Scenario
     rows: list[dict[str, float]]
     log_dir: Path
+    run_manifest: dict
 
 
 def command_point(time_s: float, axes: dict[str, float], throttle: float) -> list[float]:
@@ -577,14 +578,29 @@ def run_scenario(scenario: Scenario, index: int, run_root: Path) -> Result:
 
     telemetry_path = log_dir / "telemetry.csv"
     marker_path = log_dir / "smoke_test_ok.json"
-    if not telemetry_path.is_file() or not marker_path.is_file():
+    run_manifest_path = log_dir / "run_manifest.json"
+    if (
+        not telemetry_path.is_file()
+        or not marker_path.is_file()
+        or not run_manifest_path.is_file()
+    ):
         raise RuntimeError("simulation did not finish cleanly")
+    with run_manifest_path.open(encoding="utf-8") as manifest_file:
+        run_manifest = json.load(manifest_file)
+    apparatus = run_manifest.get("apparatus", {})
+    if apparatus.get("id") != "dream_fpv_webots" or apparatus.get("version") != "1.0.0":
+        raise RuntimeError(f"unexpected apparatus identity: {apparatus}")
     with telemetry_path.open(newline="", encoding="utf-8") as telemetry_file:
         rows = [
             {key: float(value) for key, value in row.items()}
             for row in csv.DictReader(telemetry_file)
         ]
-    return Result(scenario=scenario, rows=rows, log_dir=log_dir)
+    return Result(
+        scenario=scenario,
+        rows=rows,
+        log_dir=log_dir,
+        run_manifest=run_manifest,
+    )
 
 
 def first_time(rows: list[dict[str, float]], predicate) -> float | None:
@@ -1281,12 +1297,38 @@ def main() -> int:
     check_throttle_monotonic(metrics, failures)
     check_reproducibility(metrics, failures)
 
+    apparatus_records = {
+        (
+            result.run_manifest["apparatus"]["id"],
+            result.run_manifest["apparatus"]["version"],
+            result.run_manifest["apparatus"]["manifest_sha256"],
+        )
+        for result in results
+    }
+    if len(apparatus_records) > 1:
+        failures.append("validation scenarios used different apparatus revisions")
+    apparatus_record = None
+    if apparatus_records:
+        apparatus_id, apparatus_version, manifest_sha256 = next(
+            iter(apparatus_records)
+        )
+        apparatus_record = {
+            "id": apparatus_id,
+            "version": apparatus_version,
+            "manifest_sha256": manifest_sha256,
+        }
+
     report = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
+        "apparatus": apparatus_record,
         "scenario_count": len(scenarios),
         "completed_scenario_count": len(results),
         "passed": not failures,
         "failures": failures,
+        "run_fingerprints": {
+            result.scenario.name: result.run_manifest["run_fingerprint_sha256"]
+            for result in sorted(results, key=lambda item: item.scenario.name)
+        },
         "metrics": metrics,
     }
     report_path = run_root / "report.json"

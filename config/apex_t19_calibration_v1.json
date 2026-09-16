@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "apparatus_version": "1.0.0",
+  "recorded_on": "2026-09-16",
+  "device": "Apex T19",
+  "mode": "Mode 2",
+  "status": "mapping_and_polarity_confirmed_device_identity_pending",
+  "axis_range": 32767,
+  "deadzone": 0.02,
+  "mapping": {
+    "roll": {"axis": 0, "invert": true},
+    "pitch": {"axis": 1, "invert": true},
+    "throttle": {"axis": 2, "invert": false},
+    "yaw": {"axis": 3, "invert": true}
+  },
+  "confirmation": {
+    "source": "interactive user flight confirmation",
+    "left_vertical": "throttle",
+    "left_horizontal": "yaw",
+    "right_vertical": "pitch",
+    "right_horizontal": "roll"
+  },
+  "pending_before_formal_trials": {
+    "usb_vendor_id": null,
+    "usb_product_id": null,
+    "firmware_version": null,
+    "raw_min_center_max_by_axis": null
+  }
+}

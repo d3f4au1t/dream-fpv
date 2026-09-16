@@ -8,6 +8,9 @@ import math
 from math import radians
 import os
 from pathlib import Path
+import platform
+import subprocess
+import sys
 import time
 
 from controller import Keyboard, Supervisor
@@ -21,6 +24,11 @@ from input_mapping import (
     normalize_throttle,
     shape_throttle,
     thrust_mix_to_motor_speeds,
+)
+from apparatus import (
+    canonical_sha256,
+    classify_course_zone,
+    load_and_verify_apparatus,
 )
 
 
@@ -43,6 +51,16 @@ class DreamModeController(Supervisor):
         )
         self.config = self._load_config()
         self.flight_profile = self.config["flight_profile"]
+        (
+            self.apparatus,
+            self.course_zones,
+            self.locked_file_hashes,
+            self.apparatus_manifest_sha256,
+        ) = load_and_verify_apparatus(self.project_root, self.config)
+        self.run_seed = int(self.apparatus["random_seed"])
+        self.apparatus_version_parts = tuple(
+            int(part) for part in self.apparatus["version"].split(".")
+        )
         self.run_dir = self._create_run_directory()
         self.log_period_seconds = max(
             self.time_step / 1000.0,
@@ -82,6 +100,7 @@ class DreamModeController(Supervisor):
         self.joystick_open_wall_time = None
         self.joystick_malformed_since = None
         self.joystick_path = None
+        self.joystick_identity = None
         self.last_failed_joystick_path = None
         self.last_joystick_scan_time = -1.0
         self.joystick_enabled = os.environ.get("DREAM_MODE_DISABLE_JOYSTICK") != "1"
@@ -210,6 +229,8 @@ class DreamModeController(Supervisor):
         self.telemetry_segment_index = 0
         self.telemetry_file = None
         self.telemetry = None
+        self.run_fingerprint_sha256 = self._build_run_fingerprint()
+        self._write_run_manifest()
         self._open_telemetry_segment()
 
         print(f"Dream Mode log directory: {self.run_dir}")
@@ -272,7 +293,128 @@ class DreamModeController(Supervisor):
             timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
             run_dir = self.project_root / "logs" / timestamp
         run_dir.mkdir(parents=True, exist_ok=bool(configured))
+        controller_artifacts = (
+            "run_manifest.json",
+            "input_device.json",
+            "telemetry.csv",
+            "rgb_initial.png",
+            "depth_initial.png",
+            "depth_initial.f32",
+            "depth_initial.json",
+        )
+        existing = [name for name in controller_artifacts if (run_dir / name).exists()]
+        if existing:
+            raise FileExistsError(
+                f"Refusing to overwrite existing run artifacts in {run_dir}: "
+                + ", ".join(existing)
+            )
         return run_dir
+
+    def _dream_mode_overrides(self) -> dict[str, str]:
+        return {
+            name: value
+            for name, value in sorted(os.environ.items())
+            if name.startswith("DREAM_MODE_") and name != "DREAM_MODE_LOG_DIR"
+        }
+
+    def _git_state(self) -> dict:
+        state = {"commit": None, "dirty": None}
+        try:
+            revision = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=self.project_root,
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=2,
+            )
+            status = subprocess.run(
+                ["git", "status", "--porcelain", "--untracked-files=no"],
+                cwd=self.project_root,
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=2,
+            )
+            state["commit"] = revision.stdout.strip()
+            state["dirty"] = bool(status.stdout.strip())
+        except (OSError, subprocess.SubprocessError):
+            pass
+        return state
+
+    def _build_run_fingerprint(self) -> str:
+        payload = {
+            "apparatus_id": self.apparatus["apparatus_id"],
+            "apparatus_version": self.apparatus["version"],
+            "apparatus_manifest_sha256": self.apparatus_manifest_sha256,
+            "locked_file_hashes": self.locked_file_hashes,
+            "random_seed": self.run_seed,
+            "basic_time_step_ms": self.time_step,
+            "telemetry_period_s": self.log_period_seconds,
+            "rgb_period_ms": self.CAMERA_PERIOD_MS,
+            "depth_period_ms": self.DEPTH_PERIOD_MS,
+            "continuous_research_sensors": self.continuous_research_sensors,
+            "recovery_enabled": self.recovery_enabled,
+            "environment_overrides": self._dream_mode_overrides(),
+        }
+        return canonical_sha256(payload)
+
+    def _write_run_manifest(self) -> None:
+        manifest = {
+            "schema_version": 1,
+            "run_id": self.run_dir.name,
+            "created_at_utc": datetime.now(timezone.utc).isoformat(),
+            "apparatus": {
+                "id": self.apparatus["apparatus_id"],
+                "version": self.apparatus["version"],
+                "status": self.apparatus["status"],
+                "manifest_sha256": self.apparatus_manifest_sha256,
+                "locked_file_hashes": self.locked_file_hashes,
+            },
+            "run_fingerprint_sha256": self.run_fingerprint_sha256,
+            "random_seed": self.run_seed,
+            "runtime": {
+                "webots_tested_version": self.apparatus["simulator"]["tested_version"],
+                "python_version": platform.python_version(),
+                "python_executable": sys.executable,
+                "basic_time_step_ms": self.time_step,
+                "telemetry_period_s": self.log_period_seconds,
+                "rgb_period_ms": self.CAMERA_PERIOD_MS,
+                "depth_period_ms": self.DEPTH_PERIOD_MS,
+                "continuous_research_sensors": self.continuous_research_sensors,
+                "recovery_enabled": self.recovery_enabled,
+                "home_translation_m": self.home_translation,
+                "home_rotation_axis_angle": self.home_rotation,
+            },
+            "environment_overrides": self._dream_mode_overrides(),
+            "input_device_at_start": self.joystick_identity,
+            "git": self._git_state(),
+            "course_zones": self.course_zones,
+            "controller_config": self.config,
+        }
+        temporary = self.run_dir / ".run_manifest.json.tmp"
+        destination = self.run_dir / "run_manifest.json"
+        with temporary.open("x", encoding="utf-8") as output:
+            json.dump(manifest, output, indent=2, sort_keys=True, allow_nan=False)
+            output.write("\n")
+        temporary.replace(destination)
+
+    def _write_input_device_metadata(self) -> None:
+        if self.joystick_identity is None:
+            return
+        metadata = {
+            "schema_version": 1,
+            "apparatus_id": self.apparatus["apparatus_id"],
+            "apparatus_version": self.apparatus["version"],
+            "connected_at_utc": datetime.now(timezone.utc).isoformat(),
+            "device": self.joystick_identity,
+        }
+        temporary = self.run_dir / ".input_device.json.tmp"
+        destination = self.run_dir / "input_device.json"
+        with temporary.open("w", encoding="utf-8") as output:
+            json.dump(metadata, output, indent=2, sort_keys=True, allow_nan=False)
+            output.write("\n")
+        temporary.replace(destination)
 
     def _open_telemetry_segment(self) -> None:
         suffix = "" if self.telemetry_segment_index == 0 else f"_{self.telemetry_segment_index:03d}"
@@ -315,6 +457,11 @@ class DreamModeController(Supervisor):
             "control_step",
             "sim_time_s",
             "host_monotonic_s",
+            "run_seed",
+            "apparatus_version_major",
+            "apparatus_version_minor",
+            "apparatus_version_patch",
+            "course_zone_id",
             "x_m",
             "y_m",
             "z_m",
@@ -591,10 +738,20 @@ class DreamModeController(Supervisor):
                 self.joystick = joystick
                 self.joystick_name = joystick_name
                 self.joystick_path = device_info["path"]
+                self.joystick_identity = {
+                    "manufacturer": str(device_info.get("manufacturer_string") or ""),
+                    "product": str(device_info.get("product_string") or ""),
+                    "vendor_id": int(device_info.get("vendor_id") or 0),
+                    "product_id": int(device_info.get("product_id") or 0),
+                    "usage_page": int(device_info.get("usage_page") or 0),
+                    "usage": int(device_info.get("usage") or 0),
+                    "interface_number": int(device_info.get("interface_number") or 0),
+                }
                 self.joystick_report = []
                 self.joystick_report_wall_time = None
                 self.joystick_open_wall_time = time.monotonic()
                 self.joystick_malformed_since = None
+                self._write_input_device_metadata()
                 print(f'Joystick connected through HIDAPI: "{self.joystick_name}"')
                 return
             except (OSError, ValueError, RuntimeError) as error:
@@ -1059,6 +1216,11 @@ class DreamModeController(Supervisor):
             depth_values.tofile(depth_file)
         metadata = {
             "sim_time_s": sim_time,
+            "apparatus_id": self.apparatus["apparatus_id"],
+            "apparatus_version": self.apparatus["version"],
+            "apparatus_manifest_sha256": self.apparatus_manifest_sha256,
+            "run_fingerprint_sha256": self.run_fingerprint_sha256,
+            "random_seed": self.run_seed,
             "width": self.depth.getWidth(),
             "height": self.depth.getHeight(),
             "field_of_view_rad": self.depth.getFov(),
@@ -1108,11 +1270,17 @@ class DreamModeController(Supervisor):
         }
         input_source_code = source_codes[self.current_input_source]
         armed_input_source_code = source_codes.get(self.armed_input_source, 0)
+        course_zone_id, _ = classify_course_zone(position, self.course_zones)
 
         row = {
             "control_step": self.step_count,
             "sim_time_s": f"{sim_time:.6f}",
             "host_monotonic_s": f"{host_time:.6f}",
+            "run_seed": self.run_seed,
+            "apparatus_version_major": self.apparatus_version_parts[0],
+            "apparatus_version_minor": self.apparatus_version_parts[1],
+            "apparatus_version_patch": self.apparatus_version_parts[2],
+            "course_zone_id": course_zone_id,
             "x_m": position[0],
             "y_m": position[1],
             "z_m": position[2],
@@ -1270,6 +1438,9 @@ class DreamModeController(Supervisor):
                     marker = {
                         "steps": self.step_count,
                         "sim_time_s": self.getTime(),
+                        "apparatus_id": self.apparatus["apparatus_id"],
+                        "apparatus_version": self.apparatus["version"],
+                        "run_fingerprint_sha256": self.run_fingerprint_sha256,
                         "rgb_width": self.camera.getWidth(),
                         "rgb_height": self.camera.getHeight(),
                         "depth_width": self.depth.getWidth(),

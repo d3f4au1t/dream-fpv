@@ -1,0 +1,132 @@
+{
+  "schema_version": 1,
+  "coordinate_frame": "Webots world frame: +x forward from the launch pad, +y left, +z up; metres",
+  "boundary_rule": "lower-inclusive, upper-exclusive",
+  "fallback": {
+    "code": 0,
+    "id": "transfer",
+    "label": "Transfer / open course"
+  },
+  "zones": [
+    {
+      "code": 1,
+      "id": "start_straight",
+      "label": "Launch straight and gate 1",
+      "route_order": 1,
+      "research_context": "straight_flight",
+      "bounds_m": {
+        "x": [-8.0, 0.5],
+        "y": [-2.75, 2.75],
+        "z": [-0.4, 8.0]
+      }
+    },
+    {
+      "code": 2,
+      "id": "occlusion_turn",
+      "label": "Blue-block occlusion turn",
+      "route_order": 2,
+      "research_context": "newly_revealed_surface",
+      "bounds_m": {
+        "x": [0.6, 3.0],
+        "y": [-2.9, -1.0],
+        "z": [-0.4, 8.0]
+      }
+    },
+    {
+      "code": 3,
+      "id": "checkpoint_turn",
+      "label": "Angled yellow checkpoint",
+      "route_order": 3,
+      "research_context": "turn_exit_gate_approach",
+      "bounds_m": {
+        "x": [1.0, 5.0],
+        "y": [-7.0, -3.0],
+        "z": [-0.4, 8.0]
+      }
+    },
+    {
+      "code": 4,
+      "id": "slalom",
+      "label": "Three-pylon slalom",
+      "route_order": 4,
+      "research_context": "high_angular_velocity",
+      "bounds_m": {
+        "x": [5.25, 10.0],
+        "y": [-5.75, 3.75],
+        "z": [-0.4, 8.0]
+      }
+    },
+    {
+      "code": 5,
+      "id": "over_under",
+      "label": "Cyan over-under bar",
+      "route_order": 5,
+      "research_context": "narrow_obstacle_approach",
+      "bounds_m": {
+        "x": [10.25, 13.75],
+        "y": [4.0, 8.0],
+        "z": [-0.4, 8.0]
+      }
+    },
+    {
+      "code": 6,
+      "id": "raised_gate",
+      "label": "Raised green gate",
+      "route_order": 6,
+      "research_context": "gate_approach_height_change",
+      "bounds_m": {
+        "x": [15.5, 20.5],
+        "y": [0.0, 4.0],
+        "z": [-0.4, 8.0]
+      }
+    },
+    {
+      "code": 7,
+      "id": "gravity_gate",
+      "label": "Tilted gravity gate",
+      "route_order": 7,
+      "research_context": "vertical_maneuver",
+      "bounds_m": {
+        "x": [22.5, 27.5],
+        "y": [3.5, 8.5],
+        "z": [-0.4, 8.0]
+      }
+    },
+    {
+      "code": 8,
+      "id": "reverse_l",
+      "label": "Three-opening reverse-L",
+      "route_order": 8,
+      "research_context": "occlusion_reveal_narrow_opening",
+      "bounds_m": {
+        "x": [26.5, 32.0],
+        "y": [-3.0, 2.5],
+        "z": [-0.4, 8.0]
+      }
+    },
+    {
+      "code": 9,
+      "id": "stacked_tower",
+      "label": "Double gate tower and orbit",
+      "route_order": 9,
+      "research_context": "high_angular_velocity_stacked_gate",
+      "bounds_m": {
+        "x": [17.0, 25.0],
+        "y": [-14.0, -7.0],
+        "z": [-0.4, 8.0]
+      }
+    },
+    {
+      "code": 10,
+      "id": "finish",
+      "label": "Purple finish gate and pad",
+      "route_order": 10,
+      "research_context": "recovery_after_turn",
+      "bounds_m": {
+        "x": [11.0, 16.75],
+        "y": [-9.0, -3.0],
+        "z": [-0.4, 8.0]
+      }
+    }
+  ]
+}

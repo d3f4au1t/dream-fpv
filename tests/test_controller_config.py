@@ -21,6 +21,16 @@ class ControllerConfigTests(unittest.TestCase):
             {"roll": 0, "pitch": 1, "throttle": 2, "yaw": 3},
         )
 
+    def test_frozen_apparatus_files_are_explicit(self):
+        self.assertEqual(
+            self.config["apparatus_manifest"],
+            "config/apparatus_v1.json",
+        )
+        self.assertEqual(
+            self.config["course_zones_file"],
+            "config/course_zones.json",
+        )
+
     def test_user_confirmed_axis_inversions_are_locked(self):
         self.assertEqual(
             self.config["invert"],
