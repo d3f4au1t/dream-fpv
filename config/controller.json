@@ -1,0 +1,95 @@
+{
+  "axis_range": 32767,
+  "deadzone": 0.02,
+  "joystick_stale_timeout_seconds": 0.25,
+  "continuous_research_sensors": false,
+  "telemetry_segment_bytes": 67108864,
+  "telemetry_max_segments": 4,
+  "axes": {
+    "roll": 0,
+    "pitch": 1,
+    "throttle": 2,
+    "yaw": 3
+  },
+  "invert": {
+    "roll": true,
+    "pitch": true,
+    "throttle": false,
+    "yaw": true
+  },
+  "flight_profile": {
+    "name": "Uncrashed 198 g 2.5-inch profile with Betaflight legacy rates",
+    "reference_airframe": {
+      "source": "Uncrashed physics v2.0 screenshot",
+      "fpv_camera_angle_deg": 22.0,
+      "propeller_size_in": 2.5,
+      "motor_kv": 5000,
+      "battery_cells": 4,
+      "propeller_pitch_in": 2.0,
+      "mass_g": 198,
+      "minimum_throttle_percent": 8.0,
+      "motor_response": { "low": 1.0, "medium": 1.0, "high": 1.0 },
+      "pid_behavior": "normal",
+      "propwash": "medium",
+      "gravity_m_s2": 9.82,
+      "instant_power": 0.5,
+      "air_friction": 0.55,
+      "air_grip": 0.48,
+      "relative_air_speed": 1.0,
+      "physics_model": "v2.0",
+      "throttle_mid": 0.50,
+      "throttle_expo": 0.0,
+      "propulsion_calibration": {
+        "reference": "EMAX E3 1303 5000KV, AVAN 2.5-inch 3-blade, 16 V bench data",
+        "maximum_static_thrust_g_per_motor": 255,
+        "modeled_thrust_to_weight_ratio": 5.1515
+      }
+    },
+    "rate_type": "betaflight",
+    "rates": {
+      "roll": { "rc_rate": 1.25, "super_rate": 0.68, "expo": 0.22 },
+      "pitch": { "rc_rate": 1.25, "super_rate": 0.68, "expo": 0.22 },
+      "yaw": { "rc_rate": 1.25, "super_rate": 0.55, "expo": 0.28 }
+    },
+    "rate_gain": {
+      "roll": 0.03,
+      "pitch": 0.03,
+      "yaw": 0.15
+    },
+    "rate_integral_gain": {
+      "roll": 0.001,
+      "pitch": 0.001,
+      "yaw": 0.001
+    },
+    "rate_integral_limit": 0.02,
+    "max_axis_thrust_correction": {
+      "roll": 0.12,
+      "pitch": 0.12,
+      "yaw": 0.40
+    },
+    "airmode_axis_thrust_correction": {
+      "roll": 0.04,
+      "pitch": 0.04,
+      "yaw": 0.10
+    },
+    "throttle_exponent": 1.45,
+    "motor_idle_speed": 9.08,
+    "motor_max_speed": 113.5,
+    "ground_control_height_m": 0.08,
+    "landed_detection_seconds": 0.25,
+    "landed_linear_speed_m_s": 0.40,
+    "landed_angular_speed_rad_s": 1.0,
+    "keyboard_hover_throttle": 0.323,
+    "rearm_reset_high_throttle": 0.10,
+    "boundary_rearm_stick_max": 0.10,
+    "boundary_rearm_neutral_seconds": 0.15,
+    "crash_recovery_tilt_deg": 75.0,
+    "crash_recovery_seconds": 0.75,
+    "recovery_bounds": {
+      "x_m": [-14.5, 34.5],
+      "y_m": [-14.5, 14.5],
+      "z_m": [-0.5, 15.0]
+    },
+    "arm_throttle_max": 0.05
+  }
+}

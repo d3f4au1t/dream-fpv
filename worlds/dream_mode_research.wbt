@@ -1,0 +1,821 @@
+#VRML_SIM R2025a utf8
+# Boundary recovery re-seats this mounted FPV view and waits for neutral controls.
+
+EXTERNPROTO "../protos/FpvResearchQuad.proto"
+
+WorldInfo {
+  info [
+    "Programmable FPV practice course for uncertainty-aware predictive flight research."
+    "The course combines conventional gates, slalom pylons, an over-under bar, a gravity gate, a reverse-L gate, a double gate tower, height changes, obstacles, and synchronized logging."
+  ]
+  title "Dream Mode FPV research simulator"
+  gravity 9.82
+  basicTimeStep 8
+  defaultDamping Damping {
+    linear 0.55
+    angular 0.48
+  }
+}
+DEF FPV_VIEW Viewpoint {
+  fieldOfView 2.0943951
+  orientation 0 1 0 -0.3839724354387525
+  position -6.935 0 0.05
+  follow "Dream Mode Drone"
+  followType "Mounted Shot"
+  followSmoothness 0
+  ambientOcclusionRadius 0
+  bloomThreshold -1
+}
+Background {
+  skyColor [
+    0.55 0.72 0.9
+  ]
+}
+DirectionalLight {
+  ambientIntensity 0.8
+  direction -0.4 -0.5 -1
+  intensity 1.2
+}
+Solid {
+  translation 10 0 -0.1
+  children [
+    Shape {
+      appearance DEF FLOOR_APPEARANCE PBRAppearance {
+        baseColor 0.18 0.21 0.24
+        roughness 0.85
+        metalness 0
+      }
+      geometry Box {
+        size 50 30 0.2
+      }
+    }
+  ]
+  name "floor"
+  boundingObject Box {
+    size 50 30 0.2
+  }
+}
+Solid {
+  translation 10 15 3
+  children [
+    Shape {
+      appearance DEF WALL_APPEARANCE PBRAppearance {
+        baseColor 0.7 0.72 0.75
+        roughness 0.75
+        metalness 0
+      }
+      geometry Box {
+        size 50 0.2 6
+      }
+    }
+  ]
+  name "left corridor wall"
+  boundingObject Box {
+    size 50 0.2 6
+  }
+}
+Solid {
+  translation 10 -15 3
+  children [
+    Shape {
+      appearance USE WALL_APPEARANCE
+      geometry Box {
+        size 50 0.2 6
+      }
+    }
+  ]
+  name "right corridor wall"
+  boundingObject Box {
+    size 50 0.2 6
+  }
+}
+Solid {
+  translation -15 0 3
+  children [
+    Shape {
+      appearance USE WALL_APPEARANCE
+      geometry Box {
+        size 0.2 30 6
+      }
+    }
+  ]
+  name "start boundary wall"
+  boundingObject Box {
+    size 0.2 30 6
+  }
+}
+Solid {
+  translation 35 0 3
+  children [
+    Shape {
+      appearance USE WALL_APPEARANCE
+      geometry Box {
+        size 0.2 30 6
+      }
+    }
+  ]
+  name "far boundary wall"
+  boundingObject Box {
+    size 0.2 30 6
+  }
+}
+Solid {
+  translation -1 2.25 1.25
+  children [
+    Shape {
+      appearance DEF GATE_APPEARANCE PBRAppearance {
+        baseColor 0.95 0.35 0.08
+        roughness 0.55
+        metalness 0
+      }
+      geometry Box {
+        size 0.25 0.25 2.5
+      }
+    }
+  ]
+  name "gate 1 left"
+  boundingObject Box {
+    size 0.25 0.25 2.5
+  }
+}
+Solid {
+  translation -1 -2.25 1.25
+  children [
+    Shape {
+      appearance USE GATE_APPEARANCE
+      geometry Box {
+        size 0.25 0.25 2.5
+      }
+    }
+  ]
+  name "gate 1 right"
+  boundingObject Box {
+    size 0.25 0.25 2.5
+  }
+}
+Solid {
+  translation -1 0 2.5
+  children [
+    Shape {
+      appearance USE GATE_APPEARANCE
+      geometry Box {
+        size 0.25 4.75 0.25
+      }
+    }
+  ]
+  name "gate 1 top"
+  boundingObject Box {
+    size 0.25 4.75 0.25
+  }
+}
+Solid {
+  translation 0.8 -2 1
+  children [
+    Shape {
+      appearance DEF OBSTACLE_APPEARANCE PBRAppearance {
+        baseColor 0.12 0.42 0.72
+        roughness 0.65
+        metalness 0
+      }
+      geometry Box {
+        size 1.2 1.2 2
+      }
+    }
+  ]
+  name "occluding obstacle"
+  boundingObject Box {
+    size 1.2 1.2 2
+  }
+}
+Solid {
+  translation 16 -2 0.75
+  children [
+    Shape {
+      appearance USE OBSTACLE_APPEARANCE
+      geometry Box {
+        size 0.8 2.2 1.5
+      }
+    }
+  ]
+  name "hidden-surface obstacle"
+  boundingObject Box {
+    size 0.8 2.2 1.5
+  }
+}
+Solid {
+  translation -7 0 0.006
+  children [
+    Shape {
+      castShadows FALSE
+      appearance DEF START_PAD_APPEARANCE PBRAppearance {
+        baseColor 0.08 0.75 0.28
+        roughness 0.8
+        metalness 0
+      }
+      geometry Box {
+        size 1.5 1.5 0.012
+      }
+    }
+  ]
+  name "start pad marker"
+}
+Solid {
+  translation 1.711566464419 -6.030746828465 1.35
+  rotation 0 0 1 -0.8960553845713439
+  children [
+    DEF CHECKPOINT_POST_SHAPE Shape {
+      appearance DEF CHECKPOINT_APPEARANCE PBRAppearance {
+        baseColor 1 0.78 0.05
+        emissiveColor 0.12 0.07 0
+        roughness 0.5
+        metalness 0
+      }
+      geometry DEF CHECKPOINT_POST_BOX Box {
+        size 0.22 0.22 2.7
+      }
+    }
+  ]
+  name "checkpoint 2 outer post"
+  boundingObject USE CHECKPOINT_POST_BOX
+}
+Solid {
+  translation 4.288433535581 -3.969253171535 1.35
+  rotation 0 0 1 -0.8960553845713439
+  children [
+    USE CHECKPOINT_POST_SHAPE
+  ]
+  name "checkpoint 2 inner post"
+  boundingObject USE CHECKPOINT_POST_BOX
+}
+Solid {
+  translation 3 -5 2.7
+  rotation 0 0 1 -0.8960553845713439
+  children [
+    DEF CHECKPOINT_CROSSBAR_SHAPE Shape {
+      appearance USE CHECKPOINT_APPEARANCE
+      geometry DEF CHECKPOINT_CROSSBAR_BOX Box {
+        size 0.22 3.52 0.22
+      }
+    }
+  ]
+  name "checkpoint 2 crossbar"
+  boundingObject USE CHECKPOINT_CROSSBAR_BOX
+}
+Solid {
+  translation 7 -4.5 1.2
+  children [
+    DEF SLALOM_PYLON_SHAPE Shape {
+      appearance DEF SLALOM_APPEARANCE PBRAppearance {
+        baseColor 0.92 0.08 0.55
+        emissiveColor 0.08 0 0.03
+        roughness 0.55
+        metalness 0
+      }
+      geometry DEF SLALOM_PYLON_BOX Box {
+        size 0.38 0.38 2.4
+      }
+    }
+  ]
+  name "slalom pylon 1"
+  boundingObject USE SLALOM_PYLON_BOX
+}
+Solid {
+  translation 9 -0.5 1.2
+  children [
+    USE SLALOM_PYLON_SHAPE
+  ]
+  name "slalom pylon 2"
+  boundingObject USE SLALOM_PYLON_BOX
+}
+Solid {
+  translation 8 3 1.2
+  children [
+    USE SLALOM_PYLON_SHAPE
+  ]
+  name "slalom pylon 3"
+  boundingObject USE SLALOM_PYLON_BOX
+}
+Solid {
+  translation 10.77 7.64 0.7
+  rotation 0 0 1 0.6435011087932844
+  children [
+    DEF SPLIT_SUPPORT_SHAPE Shape {
+      appearance DEF SPLIT_LEVEL_APPEARANCE PBRAppearance {
+        baseColor 0.05 0.82 0.92
+        emissiveColor 0 0.07 0.09
+        roughness 0.5
+        metalness 0
+      }
+      geometry DEF SPLIT_SUPPORT_BOX Box {
+        size 0.28 0.28 1.4
+      }
+    }
+  ]
+  name "over-under bar left support"
+  boundingObject USE SPLIT_SUPPORT_BOX
+}
+Solid {
+  translation 13.23 4.36 0.7
+  rotation 0 0 1 0.6435011087932844
+  children [
+    USE SPLIT_SUPPORT_SHAPE
+  ]
+  name "over-under bar right support"
+  boundingObject USE SPLIT_SUPPORT_BOX
+}
+Solid {
+  translation 12 6 1.35
+  rotation 0 0 1 0.6435011087932844
+  children [
+    Shape {
+      appearance USE SPLIT_LEVEL_APPEARANCE
+      geometry DEF SPLIT_BAR_BOX Box {
+        size 0.28 4.38 0.22
+      }
+    }
+  ]
+  name "over-under flight bar"
+  boundingObject USE SPLIT_BAR_BOX
+}
+Solid {
+  translation 18.915255323772 3.372882985657 1.5
+  rotation 0 0 1 -0.5880026035475675
+  children [
+    DEF RAISED_GATE_POST_SHAPE Shape {
+      appearance DEF RAISED_GATE_APPEARANCE PBRAppearance {
+        baseColor 0.1 0.9 0.5
+        emissiveColor 0 0.08 0.025
+        roughness 0.5
+        metalness 0
+      }
+      geometry DEF RAISED_GATE_POST_BOX Box {
+        size 0.22 0.22 3
+      }
+    }
+  ]
+  name "raised gate 3 outer post"
+  boundingObject USE RAISED_GATE_POST_BOX
+}
+Solid {
+  translation 17.084744676228 0.627117014343 1.5
+  rotation 0 0 1 -0.5880026035475675
+  children [
+    USE RAISED_GATE_POST_SHAPE
+  ]
+  name "raised gate 3 inner post"
+  boundingObject USE RAISED_GATE_POST_BOX
+}
+Solid {
+  translation 18 2 2.88
+  rotation 0 0 1 -0.5880026035475675
+  children [
+    DEF RAISED_GATE_CROSSBAR_SHAPE Shape {
+      appearance USE RAISED_GATE_APPEARANCE
+      geometry DEF RAISED_GATE_CROSSBAR_BOX Box {
+        size 0.22 3.52 0.22
+      }
+    }
+  ]
+  name "raised gate 3 top"
+  boundingObject USE RAISED_GATE_CROSSBAR_BOX
+}
+Solid {
+  translation 18 2 0.65
+  rotation 0 0 1 -0.5880026035475675
+  children [
+    USE RAISED_GATE_CROSSBAR_SHAPE
+  ]
+  name "raised gate 3 bottom"
+  boundingObject USE RAISED_GATE_CROSSBAR_BOX
+}
+Solid {
+  translation 25 7.8 4.5
+  rotation 0 1 0 0.2617993877991494
+  children [
+    Shape {
+      appearance DEF GRAVITY_GATE_APPEARANCE PBRAppearance {
+        baseColor 1 0.25 0.03
+        emissiveColor 0.12 0.015 0
+        roughness 0.45
+        metalness 0
+      }
+      geometry Box {
+        size 3.8 0.24 0.24
+      }
+    }
+  ]
+  name "gravity gate north rail"
+  boundingObject Box {
+    size 3.8 0.24 0.24
+  }
+}
+Solid {
+  translation 25 4.2 4.5
+  rotation 0 1 0 0.2617993877991494
+  children [
+    Shape {
+      appearance USE GRAVITY_GATE_APPEARANCE
+      geometry Box {
+        size 3.8 0.24 0.24
+      }
+    }
+  ]
+  name "gravity gate south rail"
+  boundingObject Box {
+    size 3.8 0.24 0.24
+  }
+}
+Solid {
+  translation 23.261333323275 6 4.965874281185
+  rotation 0 1 0 0.2617993877991494
+  children [
+    Shape {
+      appearance USE GRAVITY_GATE_APPEARANCE
+      geometry Box {
+        size 0.24 3.8 0.24
+      }
+    }
+  ]
+  name "gravity gate west rail"
+  boundingObject Box {
+    size 0.24 3.8 0.24
+  }
+}
+Solid {
+  translation 26.738666676725 6 4.034125718815
+  rotation 0 1 0 0.2617993877991494
+  children [
+    Shape {
+      appearance USE GRAVITY_GATE_APPEARANCE
+      geometry Box {
+        size 0.24 3.8 0.24
+      }
+    }
+  ]
+  name "gravity gate east rail"
+  boundingObject Box {
+    size 0.24 3.8 0.24
+  }
+}
+Solid {
+  translation 23.261333323275 7.8 2.482937140593
+  children [
+    Shape {
+      appearance USE GRAVITY_GATE_APPEARANCE
+      geometry Box {
+        size 0.2 0.2 4.965874281185
+      }
+    }
+  ]
+  name "gravity gate northwest support"
+  boundingObject Box {
+    size 0.2 0.2 4.965874281185
+  }
+}
+Solid {
+  translation 26.738666676725 7.8 2.017062859408
+  children [
+    Shape {
+      appearance USE GRAVITY_GATE_APPEARANCE
+      geometry Box {
+        size 0.2 0.2 4.034125718815
+      }
+    }
+  ]
+  name "gravity gate northeast support"
+  boundingObject Box {
+    size 0.2 0.2 4.034125718815
+  }
+}
+Solid {
+  translation 26.738666676725 4.2 2.017062859408
+  children [
+    Shape {
+      appearance USE GRAVITY_GATE_APPEARANCE
+      geometry Box {
+        size 0.2 0.2 4.034125718815
+      }
+    }
+  ]
+  name "gravity gate southeast support"
+  boundingObject Box {
+    size 0.2 0.2 4.034125718815
+  }
+}
+Solid {
+  translation 25 6 0.006
+  children [
+    Shape {
+      castShadows FALSE
+      appearance PBRAppearance {
+        baseColor 1 0.25 0.03
+        emissiveColor 0.15 0.02 0
+        roughness 0.8
+        metalness 0
+      }
+      geometry Box {
+        size 1.2 1.2 0.012
+      }
+    }
+  ]
+  name "gravity gate target marker"
+}
+Solid {
+  translation 29 0 0.1
+  rotation 0 0 1 -0.982793723247329
+  children [
+    Shape {
+      appearance DEF REVERSE_L_APPEARANCE PBRAppearance {
+        baseColor 0.95 0.12 0.7
+        emissiveColor 0.1 0 0.055
+        roughness 0.48
+        metalness 0
+      }
+      geometry Box {
+        size 0.2 3.7 0.2
+      }
+    }
+  ]
+  name "reverse L bottom rail"
+  boundingObject Box {
+    size 0.2 3.7 0.2
+  }
+}
+Solid {
+  translation 29 0 1.75
+  rotation 0 0 1 -0.982793723247329
+  children [
+    Shape {
+      appearance USE REVERSE_L_APPEARANCE
+      geometry Box {
+        size 0.2 3.7 0.2
+      }
+    }
+  ]
+  name "reverse L middle rail"
+  boundingObject Box {
+    size 0.2 3.7 0.2
+  }
+}
+Solid {
+  translation 29.769646522262 0.513097681508 3.4
+  rotation 0 0 1 -0.982793723247329
+  children [
+    Shape {
+      appearance USE REVERSE_L_APPEARANCE
+      geometry Box {
+        size 0.2 1.85 0.2
+      }
+    }
+  ]
+  name "reverse L upper-right rail"
+  boundingObject Box {
+    size 0.2 1.85 0.2
+  }
+}
+Solid {
+  translation 27.543911984909 -0.970725343394 0.925
+  rotation 0 0 1 -0.982793723247329
+  children [
+    Shape {
+      appearance USE REVERSE_L_APPEARANCE
+      geometry Box {
+        size 0.2 0.2 1.85
+      }
+    }
+  ]
+  name "reverse L lower-left post"
+  boundingObject Box {
+    size 0.2 0.2 1.85
+  }
+}
+Solid {
+  translation 29 0 1.75
+  rotation 0 0 1 -0.982793723247329
+  children [
+    Shape {
+      appearance USE REVERSE_L_APPEARANCE
+      geometry Box {
+        size 0.2 0.2 3.5
+      }
+    }
+  ]
+  name "reverse L center post"
+  boundingObject Box {
+    size 0.2 0.2 3.5
+  }
+}
+Solid {
+  translation 30.456088015091 0.970725343394 1.75
+  rotation 0 0 1 -0.982793723247329
+  children [
+    Shape {
+      appearance USE REVERSE_L_APPEARANCE
+      geometry Box {
+        size 0.2 0.2 3.5
+      }
+    }
+  ]
+  name "reverse L right post"
+  boundingObject Box {
+    size 0.2 0.2 3.5
+  }
+}
+Solid {
+  translation 28.271955992454 -0.485362671697 0.006
+  rotation 0 0 1 -0.982793723247329
+  children [
+    Shape {
+      castShadows FALSE
+      appearance USE REVERSE_L_APPEARANCE
+      geometry Box {
+        size 0.9 0.5 0.012
+      }
+    }
+  ]
+  name "reverse L lower-left route marker"
+}
+Solid {
+  translation 19.222182540695 -8.222182540695 2.22
+  rotation 0 0 1 -2.356194490192345
+  children [
+    Shape {
+      appearance DEF STACKED_GATE_APPEARANCE PBRAppearance {
+        baseColor 0.08 0.55 1
+        emissiveColor 0 0.045 0.12
+        roughness 0.48
+        metalness 0
+      }
+      geometry Box {
+        size 0.22 0.22 4.44
+      }
+    }
+  ]
+  name "stacked gate left post"
+  boundingObject Box {
+    size 0.22 0.22 4.44
+  }
+}
+Solid {
+  translation 20.777817459305 -9.777817459305 2.22
+  rotation 0 0 1 -2.356194490192345
+  children [
+    Shape {
+      appearance USE STACKED_GATE_APPEARANCE
+      geometry Box {
+        size 0.22 0.22 4.44
+      }
+    }
+  ]
+  name "stacked gate right post"
+  boundingObject Box {
+    size 0.22 0.22 4.44
+  }
+}
+Solid {
+  translation 20 -9 0.11
+  rotation 0 0 1 -2.356194490192345
+  children [
+    Shape {
+      appearance USE STACKED_GATE_APPEARANCE
+      geometry Box {
+        size 0.22 2.42 0.22
+      }
+    }
+  ]
+  name "stacked gate bottom rail"
+  boundingObject Box {
+    size 0.22 2.42 0.22
+  }
+}
+Solid {
+  translation 20 -9 2.22
+  rotation 0 0 1 -2.356194490192345
+  children [
+    Shape {
+      appearance USE STACKED_GATE_APPEARANCE
+      geometry Box {
+        size 0.22 2.42 0.22
+      }
+    }
+  ]
+  name "stacked gate middle rail"
+  boundingObject Box {
+    size 0.22 2.42 0.22
+  }
+}
+Solid {
+  translation 20 -9 4.33
+  rotation 0 0 1 -2.356194490192345
+  children [
+    Shape {
+      appearance USE STACKED_GATE_APPEARANCE
+      geometry Box {
+        size 0.22 2.42 0.22
+      }
+    }
+  ]
+  name "stacked gate top rail"
+  boundingObject Box {
+    size 0.22 2.42 0.22
+  }
+}
+Solid {
+  translation 23 -12 1.5
+  children [
+    Shape {
+      appearance USE STACKED_GATE_APPEARANCE
+      geometry Box {
+        size 0.38 0.38 3
+      }
+    }
+  ]
+  name "stacked gate orbit pylon"
+  boundingObject Box {
+    size 0.38 0.38 3
+  }
+}
+Solid {
+  translation 14.782623792125 -4.43475241575 1.35
+  rotation 0 0 1 2.677945044588987
+  children [
+    DEF FINISH_POST_SHAPE Shape {
+      appearance DEF FINISH_APPEARANCE PBRAppearance {
+        baseColor 0.55 0.18 0.95
+        emissiveColor 0.05 0.01 0.12
+        roughness 0.5
+        metalness 0
+      }
+      geometry USE CHECKPOINT_POST_BOX
+    }
+  ]
+  name "finish gate right post"
+  boundingObject USE CHECKPOINT_POST_BOX
+}
+Solid {
+  translation 13.217376207875 -7.56524758425 1.35
+  rotation 0 0 1 2.677945044588987
+  children [
+    USE FINISH_POST_SHAPE
+  ]
+  name "finish gate left post"
+  boundingObject USE CHECKPOINT_POST_BOX
+}
+Solid {
+  translation 14 -6 2.7
+  rotation 0 0 1 2.677945044588987
+  children [
+    Shape {
+      appearance USE FINISH_APPEARANCE
+      geometry DEF FINISH_CROSSBAR_BOX Box {
+        size 0.22 3.72 0.22
+      }
+    }
+  ]
+  name "finish gate crossbar"
+  boundingObject USE FINISH_CROSSBAR_BOX
+}
+Solid {
+  translation 12.211145618 -5.105572809 0.006
+  rotation 0 0 1 2.677945044588987
+  children [
+    Shape {
+      castShadows FALSE
+      appearance USE FINISH_APPEARANCE
+      geometry Box {
+        size 1.5 1.5 0.012
+      }
+    }
+  ]
+  name "finish pad marker"
+}
+FpvResearchQuad {
+  translation -7 0 0.03
+  rotation 0 0 1 0
+  name "Dream Mode Drone"
+  supervisor TRUE
+  extensionSlot [
+    Accelerometer {
+    }
+    Camera {
+      translation 0.065 0 0.02
+      rotation 0 1 0 -0.3839724354387525
+      name "research camera"
+      fieldOfView 2.0943951
+      width 480
+      height 270
+      near 0.05
+    }
+    RangeFinder {
+      translation 0.065 0 0.02
+      rotation 0 1 0 -0.3839724354387525
+      name "depth"
+      fieldOfView 2.0943951
+      width 320
+      height 180
+      near 0.05
+      minRange 0.05
+      maxRange 20
+    }
+  ]
+}

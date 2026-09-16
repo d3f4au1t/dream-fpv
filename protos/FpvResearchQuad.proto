@@ -1,0 +1,197 @@
+#VRML_SIM R2025a utf8
+# A 198 g, 2.5-inch X quad derived from Cyberbotics' R2025a Crazyflie PROTO.
+# license: Copyright Cyberbotics Ltd. Licensed for use only with Webots.
+# license url: https://cyberbotics.com/webots_assets_license
+# documentation url: https://github.com/cyberbotics/webots/blob/R2025a/projects/robots/bitcraze/crazyflie/protos/Crazyflie.proto
+
+PROTO FpvResearchQuad [
+  field SFVec3f    translation      0 0 0.015
+  field SFRotation rotation         0 0 1 0
+  field SFString   name             "FPV Research Quad"
+  field SFString   controller       "dream_mode_controller"
+  field MFString   controllerArgs   []
+  field SFString   window           "<generic>"
+  field SFString   customData       ""
+  field SFBool     supervisor       FALSE
+  field SFBool     synchronization  TRUE
+  field SFFloat    motorMaxTorque   3000
+  field MFNode     extensionSlot    []
+]
+{
+  Robot {
+    translation IS translation
+    rotation IS rotation
+    controller IS controller
+    controllerArgs IS controllerArgs
+    window IS window
+    customData IS customData
+    supervisor IS supervisor
+    synchronization IS synchronization
+    name IS name
+    model "198 g 2.5-inch 5000 KV 4S research quad"
+    children [
+      Pose {
+        translation 0 0 -0.015
+        children [
+          Group {
+            children IS extensionSlot
+          }
+          CadShape {
+            url [
+              "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/robots/bitcraze/crazyflie/protos/meshes/cf2_assembly.dae"
+            ]
+          }
+        ]
+      }
+      GPS {
+      }
+      Gyro {
+      }
+      InertialUnit {
+        name "inertial_unit"
+      }
+      # 255 g static thrust per motor at the configured 113.5 rad/s model
+      # speed, anchored to a published 5000 KV / 2.5-inch / 16 V bench test.
+      DEF M1 Propeller {
+        shaftAxis 0 0 1
+        centerOfThrust 0.045 -0.045 0.008
+        thrustConstants -0.0001943837451 0
+        torqueConstants 2.4e-06 0
+        fastHelixThreshold 50
+        device RotationalMotor {
+          name "m1_motor"
+          maxVelocity 600
+          maxTorque IS motorMaxTorque
+        }
+        fastHelix Solid {
+          translation 0.045 -0.045 0.008
+          children [
+            DEF FASTHELIX Shape {
+              appearance PBRAppearance {
+                baseColor 0.1 0.1 0.1
+                baseColorMap ImageTexture {
+                  url [
+                    "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/default/protos/textures/fast_helix.png"
+                  ]
+                }
+                metalness 0
+              }
+              geometry Cylinder {
+                height 0.001
+                radius 0.03175
+              }
+            }
+          ]
+        }
+        slowHelix Solid {
+          translation 0.045 -0.045 0.008
+          children [
+            DEF PROP_VISUAL Transform {
+              scale 1.27 1.27 1
+              children [
+                Shape {
+                  appearance DEF PLASTIC PBRAppearance {
+                    baseColor 0 0 0
+                    metalness 0.3
+                  }
+                  geometry Mesh {
+                    url [
+                      "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/robots/bitcraze/crazyflie/protos/meshes/ccw_prop.dae"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+      DEF M2 Propeller {
+        shaftAxis 0 0 1
+        centerOfThrust -0.045 -0.045 0.008
+        thrustConstants 0.0001943837451 0
+        torqueConstants 2.4e-06 0
+        fastHelixThreshold 50
+        device RotationalMotor {
+          name "m2_motor"
+          maxVelocity 600
+          maxTorque IS motorMaxTorque
+        }
+        fastHelix Solid {
+          translation -0.045 -0.045 0.008
+          children [
+            USE FASTHELIX
+          ]
+        }
+        slowHelix Solid {
+          translation -0.045 -0.045 0.008
+          children [
+            USE PROP_VISUAL
+          ]
+        }
+      }
+      DEF M3 Propeller {
+        shaftAxis 0 0 1
+        centerOfThrust -0.045 0.045 0.008
+        thrustConstants -0.0001943837451 0
+        torqueConstants 2.4e-06 0
+        fastHelixThreshold 50
+        device RotationalMotor {
+          name "m3_motor"
+          maxVelocity 600
+          maxTorque IS motorMaxTorque
+        }
+        fastHelix Solid {
+          translation -0.045 0.045 0.008
+          children [
+            USE FASTHELIX
+          ]
+        }
+        slowHelix Solid {
+          translation -0.045 0.045 0.008
+          children [
+            USE PROP_VISUAL
+          ]
+        }
+      }
+      DEF M4 Propeller {
+        shaftAxis 0 0 1
+        centerOfThrust 0.045 0.045 0.008
+        thrustConstants 0.0001943837451 0
+        torqueConstants 2.4e-06 0
+        fastHelixThreshold 50
+        device RotationalMotor {
+          name "m4_motor"
+          maxVelocity 600
+          maxTorque IS motorMaxTorque
+        }
+        fastHelix Solid {
+          translation 0.045 0.045 0.008
+          children [
+            USE FASTHELIX
+          ]
+        }
+        slowHelix Solid {
+          translation 0.045 0.045 0.007
+          children [
+            USE PROP_VISUAL
+          ]
+        }
+      }
+    ]
+    boundingObject Cylinder {
+      height 0.04
+      radius 0.077
+    }
+    physics Physics {
+      density -1
+      mass 0.198
+      centerOfMass [
+        0 0 0
+      ]
+      inertiaMatrix [
+        0.00022 0.00022 0.0004
+        0 0 0
+      ]
+    }
+  }
+}
