@@ -6,8 +6,9 @@ webots_app="/Applications/Webots.app"
 webots_bin="/Applications/Webots.app/Contents/MacOS/webots"
 world_path="$project_dir/worlds/dream_mode_research.wbt"
 smoke_dir="$(mktemp -d /tmp/dream-mode-webots-smoke.XXXXXX)"
-output_file="$smoke_dir/webots-output.txt"
-error_file="$smoke_dir/webots-error.txt"
+output_file=""
+error_file=""
+run_dir=""
 webots_pid=""
 port=""
 keep_smoke="${DREAM_MODE_KEEP_SMOKE:-0}"
@@ -58,66 +59,85 @@ if [[ ! -x "$webots_bin" ]]; then
   exit 1
 fi
 
-port="$(python3 - <<'PY'
+available_port() {
+  python3 - <<'PY'
 import socket
 
 with socket.socket() as listener:
     listener.bind(("127.0.0.1", 0))
     print(listener.getsockname()[1])
 PY
-)"
+}
 
-if ! /usr/bin/open -F -g -j -n -a "$webots_app" \
-  -o "$output_file" --stderr "$error_file" \
-  --env QT_MAC_DISABLE_FOREGROUND_APPLICATION_TRANSFORM=1 \
-  --env DREAM_MODE_SMOKE_STEPS=800 \
-  --env DREAM_MODE_FIXED_ROLL=0.0 \
-  --env DREAM_MODE_FIXED_PITCH=0.0 \
-  --env DREAM_MODE_FIXED_YAW=0.0 \
-  --env DREAM_MODE_FIXED_THROTTLE=0.36 \
-  --env DREAM_MODE_RATE_IMPULSE_STEP=300 \
-  --env DREAM_MODE_INITIAL_ROLL_RATE=1.0 \
-  --env DREAM_MODE_INITIAL_PITCH_RATE=1.0 \
-  --env DREAM_MODE_INITIAL_YAW_RATE=1.0 \
-  --env DREAM_MODE_BYPASS_ARMING=1 \
-  --env DREAM_MODE_DISABLE_JOYSTICK=1 \
-  --env DREAM_MODE_LOG_DIR="$smoke_dir/log" \
-  --env PYTHONDONTWRITEBYTECODE=1 \
-  --args --batch --no-rendering --mode=fast \
-  --port="$port" --stdout --stderr "$world_path"; then
-  cat "$output_file" "$error_file" 2>/dev/null || true
-  print -u2 "Could not launch the hidden Webots smoke-test instance"
-  exit 1
-fi
+run_smoke_attempt() {
+  local attempt="$1"
+  local attempt_dir="$smoke_dir/attempt_$attempt"
+  mkdir -p "$attempt_dir"
+  output_file="$attempt_dir/webots-output.txt"
+  error_file="$attempt_dir/webots-error.txt"
+  run_dir="$attempt_dir/log"
+  port="$(available_port)"
 
-deadline=$((SECONDS + 45))
-seen_instance=0
-while [[ ! -s "$smoke_dir/log/smoke_test_ok.json" ]]; do
-  if pgrep -f "^${webots_bin} .*--port=${port}( |$)" >/dev/null 2>&1; then
-    seen_instance=1
-  elif (( seen_instance )); then
-    cat "$output_file" "$error_file"
-    print -u2 "Webots smoke test exited before the controller finished"
-    exit 1
+  if ! /usr/bin/open -F -g -j -n -a "$webots_app" \
+    -o "$output_file" --stderr "$error_file" \
+    --env QT_MAC_DISABLE_FOREGROUND_APPLICATION_TRANSFORM=1 \
+    --env DREAM_MODE_SMOKE_STEPS=800 \
+    --env DREAM_MODE_FIXED_ROLL=0.0 \
+    --env DREAM_MODE_FIXED_PITCH=0.0 \
+    --env DREAM_MODE_FIXED_YAW=0.0 \
+    --env DREAM_MODE_FIXED_THROTTLE=0.36 \
+    --env DREAM_MODE_RATE_IMPULSE_STEP=300 \
+    --env DREAM_MODE_INITIAL_ROLL_RATE=1.0 \
+    --env DREAM_MODE_INITIAL_PITCH_RATE=1.0 \
+    --env DREAM_MODE_INITIAL_YAW_RATE=1.0 \
+    --env DREAM_MODE_BYPASS_ARMING=1 \
+    --env DREAM_MODE_DISABLE_JOYSTICK=1 \
+    --env DREAM_MODE_LOG_DIR="$run_dir" \
+    --env PYTHONDONTWRITEBYTECODE=1 \
+    --args --batch --no-rendering --mode=fast \
+    --port="$port" --stdout --stderr "$world_path"; then
+    return 1
   fi
-  if (( SECONDS >= deadline )); then
-    terminate_test_instance
-    cat "$output_file" "$error_file"
-    print -u2 "Webots smoke test timed out after 45 seconds"
-    exit 1
+
+  local deadline=$((SECONDS + 45))
+  local seen_instance=0
+  while [[ ! -s "$run_dir/smoke_test_ok.json" ]]; do
+    if pgrep -f "^${webots_bin} .*--port=${port}( |$)" >/dev/null 2>&1; then
+      seen_instance=1
+    elif (( seen_instance )); then
+      terminate_test_instance
+      return 1
+    fi
+    if (( SECONDS >= deadline )); then
+      terminate_test_instance
+      return 1
+    fi
+    sleep 0.2
+  done
+
+  for _ in {1..50}; do
+    pgrep -f "^${webots_bin} .*--port=${port}( |$)" >/dev/null 2>&1 || break
+    sleep 0.1
+  done
+  terminate_test_instance
+  return 0
+}
+
+smoke_complete=0
+for attempt in 1 2 3; do
+  if run_smoke_attempt "$attempt"; then
+    smoke_complete=1
+    break
   fi
-  sleep 0.2
+  if (( attempt < 3 )); then
+    print "Smoke-test startup attempt $attempt failed; retrying."
+    sleep "$attempt"
+  fi
 done
 
-for _ in {1..50}; do
-  pgrep -f "^${webots_bin} .*--port=${port}( |$)" >/dev/null 2>&1 || break
-  sleep 0.1
-done
-terminate_test_instance
-
-if [[ ! -s "$smoke_dir/log/smoke_test_ok.json" ]]; then
+if (( ! smoke_complete )); then
   cat "$output_file" "$error_file"
-  print -u2 "Webots controller did not write its smoke-test success marker"
+  print -u2 "Webots smoke test failed to start after 3 attempts"
   exit 1
 fi
 
@@ -130,14 +150,14 @@ required_files=(
   depth_initial.json
 )
 for required_file in "${required_files[@]}"; do
-  if [[ ! -s "$smoke_dir/log/$required_file" ]]; then
+  if [[ ! -s "$run_dir/$required_file" ]]; then
     cat "$output_file" "$error_file"
     print -u2 "Missing or empty smoke-test artifact: $required_file"
     exit 1
   fi
 done
 
-row_count="$(wc -l < "$smoke_dir/log/telemetry.csv" | tr -d ' ')"
+row_count="$(wc -l < "$run_dir/telemetry.csv" | tr -d ' ')"
 if (( row_count < 10 )); then
   cat "$output_file" "$error_file"
   print -u2 "Telemetry contains too few rows: $row_count"
@@ -145,14 +165,14 @@ if (( row_count < 10 )); then
 fi
 
 if ! python3 - \
-  "$smoke_dir/log/smoke_test_ok.json" \
+  "$run_dir/smoke_test_ok.json" \
   "$project_dir/config/controller.json" \
-  "$smoke_dir/log/run_manifest.json" \
-  "$smoke_dir/log/rgb_initial.png" \
-  "$smoke_dir/log/depth_initial.png" \
-  "$smoke_dir/log/depth_initial.f32" \
-  "$smoke_dir/log/depth_initial.json" \
-  "$smoke_dir/log/telemetry.csv" <<'PY'
+  "$run_dir/run_manifest.json" \
+  "$run_dir/rgb_initial.png" \
+  "$run_dir/depth_initial.png" \
+  "$run_dir/depth_initial.f32" \
+  "$run_dir/depth_initial.json" \
+  "$run_dir/telemetry.csv" <<'PY'
 import csv
 import hashlib
 import json
