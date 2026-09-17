@@ -3,12 +3,14 @@
 from array import array
 import csv
 from datetime import datetime, timezone
+import hashlib
 import json
 import math
 from math import radians
 import os
 from pathlib import Path
 import platform
+import re
 import subprocess
 import sys
 import time
@@ -28,8 +30,18 @@ from input_mapping import (
 from apparatus import (
     canonical_sha256,
     classify_course_zone,
+    file_sha256,
     load_and_verify_apparatus,
 )
+from outage_baselines import (
+    OutageConfigurationError,
+    OutageRuntime,
+    OutageRuntimeError,
+    PilotFrameSelector,
+    materialize_schedule,
+    validate_zone_references,
+)
+from outage_artifacts import write_bgra_png, write_depth_bundle
 
 
 class DreamModeController(Supervisor):
@@ -63,6 +75,55 @@ class DreamModeController(Supervisor):
             "config/controller.json"
         ]
         self.webots_actual_version = self._read_webots_version()
+        self.outage_config_path = (
+            self.project_root / self.config["outage_baseline_config"]
+        ).resolve()
+        try:
+            with self.outage_config_path.open(encoding="utf-8") as outage_file:
+                self.outage_config = json.load(outage_file)
+            self.outage_mode = os.environ.get(
+                "DREAM_MODE_OUTAGE_MODE", "off"
+            ).strip().lower()
+            condition_override = os.environ.get("DREAM_MODE_OUTAGE_CONDITION")
+            self.outage_condition_override = (
+                None
+                if condition_override in (None, "", "configured")
+                else condition_override.strip().lower()
+            )
+            seed_override_text = os.environ.get("DREAM_MODE_OUTAGE_SEED")
+            seed_override = (
+                None if seed_override_text is None else int(seed_override_text)
+            )
+            script_text = os.environ.get("DREAM_MODE_OUTAGE_SCRIPT")
+            scripted_events = None if script_text is None else json.loads(script_text)
+            self.outage_schedule = materialize_schedule(
+                self.outage_config,
+                self.outage_mode,
+                condition_override=self.outage_condition_override,
+                seed_override=seed_override,
+                scripted_events=scripted_events,
+            )
+            validate_zone_references(
+                self.outage_config,
+                self.outage_schedule,
+                self.course_zones,
+            )
+            self.research_overlay_safety = self._verify_research_overlay_safety(
+                self.outage_mode
+            )
+        except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError) as error:
+            raise RuntimeError(f"Invalid Phase 2 outage configuration: {error}") from error
+        outage_timing = self.outage_config["timing"]
+        if int(outage_timing["control_step_ms"]) != self.time_step:
+            raise RuntimeError(
+                "Outage control step does not match the Webots basic time step"
+            )
+        if int(outage_timing["display_period_ms"]) != self.CAMERA_PERIOD_MS:
+            raise RuntimeError("Outage display period does not match the RGB camera")
+        if int(outage_timing["rgbd_anchor_period_ms"]) != self.DEPTH_PERIOD_MS:
+            raise RuntimeError("Outage RGB-D anchor period does not match depth")
+        self.outage_config_sha256 = file_sha256(self.outage_config_path)
+        self.outage_runtime = OutageRuntime(self.outage_schedule)
         self.apparatus_version_parts = tuple(
             int(part) for part in self.apparatus["version"].split(".")
         )
@@ -87,9 +148,69 @@ class DreamModeController(Supervisor):
         self.continuous_research_sensors = (
             os.environ.get("DREAM_MODE_CONTINUOUS_SENSORS") == "1"
             or bool(self.config.get("continuous_research_sensors", False))
+            or self.outage_mode != "off"
         )
         self.capture_initial_frames_enabled = (
             os.environ.get("DREAM_MODE_SKIP_INITIAL_CAPTURE") != "1"
+        )
+        self.pilot_display = self.getDevice("pilot display")
+        if self.pilot_display is None:
+            raise RuntimeError('Required Webots device "pilot display" is missing')
+        if (
+            self.pilot_display.getWidth() != self.camera.getWidth()
+            or self.pilot_display.getHeight() != self.camera.getHeight()
+        ):
+            raise RuntimeError("Pilot display dimensions must match the RGB camera")
+        self.pilot_display_node = self.getFromDevice(self.pilot_display._tag)
+        camera_node = self.getFromDevice(self.camera._tag)
+        depth_node = self.getFromDevice(self.depth._tag)
+        if self.pilot_display_node is None or camera_node is None or depth_node is None:
+            raise RuntimeError("Could not resolve Phase 2 rendering devices")
+        # The pilot display sits directly in front of the mounted Viewpoint.
+        # Hide that surface from both research sensors to avoid recursively
+        # capturing the display instead of the simulated world.
+        self.pilot_display_node.setVisibility(camera_node, False)
+        self.pilot_display_node.setVisibility(depth_node, False)
+        self.pilot_display.setAlpha(0.0)
+        self.pilot_display.setOpacity(1.0)
+        self.pilot_display.fillRectangle(
+            0,
+            0,
+            self.pilot_display.getWidth(),
+            self.pilot_display.getHeight(),
+        )
+        self.pilot_display.attachCamera(self.camera)
+        self.pilot_frame_selector = PilotFrameSelector(
+            self.camera.getWidth() * self.camera.getHeight() * 4
+        )
+        self.pilot_frame_id = 0
+        self.last_pilot_live_frame_id = None
+        self.last_pilot_live_frame_time = None
+        self.last_pilot_live_frame = None
+        self.outage_anchor_frame_id = None
+        self.outage_anchor_frame_time = None
+        self.outage_anchor_sha256 = None
+        self.outage_display_image = None
+        self.outage_artifact_dir = None
+        self.outage_artifact_records = []
+        self.outage_current_artifact = None
+        self.outage_pending_return_captures = []
+        self.outage_artifacts_flushed = False
+        self.display_readback_validation_enabled = (
+            os.environ.get("DREAM_MODE_VALIDATE_DISPLAY_READBACK") == "1"
+        )
+        self.viewpoint_capture_validation_enabled = (
+            os.environ.get("DREAM_MODE_CAPTURE_VIEWPOINT") == "1"
+        )
+        self.outage_midpoint_saved = False
+        self.last_outage_transition = None
+        self.outage_events_file = None
+        self.display_frames_file = None
+        self.display_frames = None
+        self.last_display_flush_wall_time = time.monotonic()
+        self.display_frame_logging_enabled = (
+            self.outage_mode != "off"
+            or os.environ.get("DREAM_MODE_LOG_DISPLAY_FRAMES") == "1"
         )
         self.imu = self._enable_device("inertial_unit")
         self.gps = self._enable_device("gps")
@@ -239,9 +360,17 @@ class DreamModeController(Supervisor):
         self._refresh_joystick()
         self.run_fingerprint_sha256 = self._build_run_fingerprint()
         self._write_run_manifest()
+        self._open_outage_logs()
         self._open_telemetry_segment()
 
         print(f"Dream Mode log directory: {self.run_dir}")
+        if self.outage_mode == "off":
+            print("Phase 2 outage emulator is off; pilot display is live.")
+        else:
+            print(
+                "Phase 2 outage emulator active: "
+                f"{self.outage_mode}, {len(self.outage_schedule['events'])} events."
+            )
         print("Waiting for joystick; keyboard fallback is active.")
         if not self.armed:
             print("Move throttle fully down once to arm the simulated motors.")
@@ -250,6 +379,49 @@ class DreamModeController(Supervisor):
         path = self.project_root / "config" / "controller.json"
         with path.open(encoding="utf-8") as config_file:
             return json.load(config_file)
+
+    def _verify_research_overlay_safety(self, outage_mode: str) -> dict:
+        """Reject an experiment if a live hidden-truth overlay is visible."""
+        project_path = self.project_root / "worlds" / ".dream_mode_research.wbproj"
+        state = {
+            "project_file": str(project_path.relative_to(self.project_root)),
+            "research_camera_visible": None,
+            "depth_visible": None,
+        }
+        try:
+            project_text = project_path.read_text(encoding="utf-8")
+        except OSError as error:
+            if outage_mode != "off":
+                raise RuntimeError(
+                    f"Cannot verify research overlay safety: {error}"
+                ) from error
+            return state
+        for device, key in (
+            ("research camera", "research_camera_visible"),
+            ("depth", "depth_visible"),
+        ):
+            match = re.search(
+                rf"^renderingDevicePerspectives: Dream Mode Drone:"
+                rf"{re.escape(device)};([01]);",
+                project_text,
+                re.MULTILINE,
+            )
+            if match is not None:
+                state[key] = match.group(1) == "1"
+        unsafe = [
+            label
+            for label, key in (
+                ("research camera", "research_camera_visible"),
+                ("depth", "depth_visible"),
+            )
+            if state[key] is not False
+        ]
+        if outage_mode != "off" and unsafe:
+            raise RuntimeError(
+                "Phase 2 requires hidden live RGB/depth overlays; unsafe or "
+                "unverified: " + ", ".join(unsafe)
+            )
+        return state
 
     @staticmethod
     def _optional_float_env(name: str) -> float | None:
@@ -348,6 +520,9 @@ class DreamModeController(Supervisor):
             "depth_initial.png",
             "depth_initial.f32",
             "depth_initial.json",
+            "outage_schedule.json",
+            "outage_events.jsonl",
+            "display_frames.csv",
             "smoke_test_ok.json",
         )
         existing = [name for name in controller_artifacts if (run_dir / name).exists()]
@@ -411,6 +586,20 @@ class DreamModeController(Supervisor):
             "home_translation_m": self.home_translation,
             "home_rotation_axis_angle": self.home_rotation,
             "controller_config_sha256": self.controller_config_sha256,
+            "outage_baseline": {
+                "mode": getattr(self, "outage_mode", "off"),
+                "condition_override": getattr(
+                    self, "outage_condition_override", None
+                ),
+                "config_sha256": getattr(self, "outage_config_sha256", None),
+                "schedule_sha256": getattr(self, "outage_schedule", {}).get(
+                    "schedule_sha256"
+                ),
+                "seed": getattr(self, "outage_schedule", {}).get("seed"),
+                "research_overlay_safety": getattr(
+                    self, "research_overlay_safety", None
+                ),
+            },
             "webots_actual_version": self.webots_actual_version,
             "environment_overrides": self._dream_mode_overrides(),
         }
@@ -446,6 +635,28 @@ class DreamModeController(Supervisor):
                 "home_rotation_axis_angle": self.home_rotation,
             },
             "environment_overrides": self._dream_mode_overrides(),
+            "outage_baseline": {
+                "experiment_id": self.outage_schedule["experiment_id"],
+                "experiment_version": self.outage_schedule["experiment_version"],
+                "mode": self.outage_mode,
+                "condition_override": self.outage_condition_override,
+                "seed": self.outage_schedule["seed"],
+                "config_file": self.config["outage_baseline_config"],
+                "config_sha256": self.outage_config_sha256,
+                "schedule_file": "outage_schedule.json",
+                "schedule_sha256": self.outage_schedule["schedule_sha256"],
+                "pilot_display": {
+                    "device": "pilot display",
+                    "width": self.pilot_display.getWidth(),
+                    "height": self.pilot_display.getHeight(),
+                    "period_ms": self.CAMERA_PERIOD_MS,
+                    "command_latency_control_steps": 1,
+                },
+                "artifact_write_policy": "capture in memory, write after flight",
+                "physical_display_readback": self.display_readback_validation_enabled,
+                "viewpoint_capture": self.viewpoint_capture_validation_enabled,
+                "research_overlay_safety": self.research_overlay_safety,
+            },
             "input_device_at_start": self.joystick_identity,
             "git": self._git_state(),
             "course_zones": self.course_zones,
@@ -457,6 +668,77 @@ class DreamModeController(Supervisor):
             json.dump(manifest, output, indent=2, sort_keys=True, allow_nan=False)
             output.write("\n")
         temporary.replace(destination)
+
+    def _open_outage_logs(self) -> None:
+        schedule_path = self.run_dir / "outage_schedule.json"
+        with schedule_path.open("x", encoding="utf-8") as output:
+            json.dump(
+                self.outage_schedule,
+                output,
+                indent=2,
+                sort_keys=True,
+                allow_nan=False,
+            )
+            output.write("\n")
+
+        self.outage_events_file = (self.run_dir / "outage_events.jsonl").open(
+            "x", encoding="utf-8"
+        )
+        self.display_frames_file = (self.run_dir / "display_frames.csv").open(
+            "x", newline="", encoding="utf-8"
+        )
+        self.display_frames = csv.DictWriter(
+            self.display_frames_file,
+            fieldnames=[
+                "pilot_frame_id",
+                "control_step",
+                "sim_time_s",
+                "host_monotonic_s",
+                "display_mode_code",
+                "display_mode",
+                "event_ordinal",
+                "event_id",
+                "source_type",
+                "source_frame_id",
+                "source_sim_time_s",
+                "source_age_ms",
+                "anchor_sha256",
+                "rendered_sha256",
+                "hidden_ground_truth_sha256",
+                "render_differs_from_ground_truth",
+                "schedule_sha256",
+            ],
+        )
+        self.display_frames.writeheader()
+        self.display_frames_file.flush()
+        self._write_outage_event(
+            "run_start",
+            mode=self.outage_mode,
+            condition_override=self.outage_condition_override,
+            event_count=len(self.outage_schedule["events"]),
+            seed=self.outage_schedule["seed"],
+        )
+
+    def _write_outage_event(self, event_type: str, **details) -> None:
+        if self.outage_events_file is None:
+            return
+        record = {
+            "schema_version": 1,
+            "type": event_type,
+            "control_step": self.step_count,
+            "sim_time_s": self.getTime(),
+            "host_monotonic_s": time.monotonic(),
+            "schedule_sha256": self.outage_schedule["schedule_sha256"],
+            **details,
+        }
+        json.dump(
+            record,
+            self.outage_events_file,
+            sort_keys=True,
+            allow_nan=False,
+        )
+        self.outage_events_file.write("\n")
+        self.outage_events_file.flush()
 
     def _write_input_device_metadata(self) -> None:
         if self.joystick_identity is None:
@@ -569,6 +851,14 @@ class DreamModeController(Supervisor):
             "input_source_code",
             "hid_report_age_ms",
             "joystick_connected",
+            "outage_active",
+            "outage_condition_code",
+            "outage_event_ordinal",
+            "outage_seed",
+            "outage_requested_duration_ms",
+            "outage_effective_duration_ms",
+            "outage_elapsed_ms",
+            "outage_anchor_age_ms",
         ]
         fields.extend(f"raw_axis_{index}" for index in range(cls.MAX_RAW_AXES))
         return fields
@@ -1161,6 +1451,7 @@ class DreamModeController(Supervisor):
         follow_field.setSFString(self.home_viewpoint_follow or "Dream Mode Drone")
 
     def _return_home(self, message: str, *, reason_code: int) -> None:
+        self._abort_active_outage("vehicle_recovery")
         required_source = self.armed_input_source
         preserve_stronger_gesture = (
             self.rearm_inhibit and not self.boundary_rearm_pending
@@ -1260,8 +1551,8 @@ class DreamModeController(Supervisor):
         if self.captured_initial_frames:
             return
         if not self.capture_initial_frames_enabled:
-            self.camera.disable()
-            self.depth.disable()
+            if not self.continuous_research_sensors:
+                self.depth.disable()
             self.captured_initial_frames = True
             return
         sim_time = self.getTime()
@@ -1297,8 +1588,424 @@ class DreamModeController(Supervisor):
             file.write("\n")
         self.captured_initial_frames = True
         if not self.continuous_research_sensors:
-            self.camera.disable()
             self.depth.disable()
+
+    def _clear_pilot_display_layer(self) -> None:
+        self.pilot_display.setColor(0x000000)
+        self.pilot_display.setAlpha(0.0)
+        self.pilot_display.setOpacity(1.0)
+        self.pilot_display.fillRectangle(
+            0,
+            0,
+            self.pilot_display.getWidth(),
+            self.pilot_display.getHeight(),
+        )
+
+    def _restore_live_pilot_display(self) -> None:
+        self._clear_pilot_display_layer()
+        self.pilot_display.attachCamera(self.camera)
+        if self.outage_display_image is not None:
+            self.pilot_display.imageDelete(self.outage_display_image)
+            self.outage_display_image = None
+
+    def _capture_depth_snapshot(self) -> tuple[array, dict]:
+        values = array("f", self.depth.getRangeImage())
+        metadata = {
+            "schema_version": 1,
+            "sim_time_s": self.getTime(),
+            "control_step": self.step_count,
+            "width": self.depth.getWidth(),
+            "height": self.depth.getHeight(),
+            "field_of_view_rad": self.depth.getFov(),
+            "min_range_m": self.depth.getMinRange(),
+            "max_range_m": self.depth.getMaxRange(),
+            "units": "metres",
+            "encoding": "native-endian float32, row-major",
+            "run_fingerprint_sha256": self.run_fingerprint_sha256,
+            "schedule_sha256": self.outage_schedule["schedule_sha256"],
+        }
+        return values, metadata
+
+    def _outage_flight_state(self) -> dict:
+        position = list(self.drone_node.getPosition())
+        velocity = list(self.drone_node.getVelocity())
+        zone_code, zone_id = classify_course_zone(position, self.course_zones)
+        return {
+            "course_zone_code": zone_code,
+            "course_zone_id": zone_id,
+            "position_m": position,
+            "velocity_m_s_rad_s": velocity,
+            "recovery_count": self.recovery_count,
+            "armed": self.armed,
+            "airborne": self.airborne,
+        }
+
+    def _begin_outage(
+        self,
+        event: dict,
+        live_frame: bytes | None,
+        live_frame_sha256: str | None,
+    ) -> None:
+        processing_started = time.monotonic()
+        if live_frame is None or live_frame_sha256 is None:
+            raise RuntimeError(
+                f"Outage {event['id']} did not start on a valid RGB-D anchor frame"
+            )
+        directory = self.run_dir / "outages" / (
+            f"{int(event['ordinal']):03d}_{event['id']}"
+        )
+        directory.mkdir(parents=True, exist_ok=False)
+        self.outage_artifact_dir = directory
+        self.outage_midpoint_saved = False
+        self.outage_anchor_frame_id = self.last_pilot_live_frame_id
+        self.outage_anchor_frame_time = self.last_pilot_live_frame_time
+        self.outage_anchor_sha256 = live_frame_sha256
+        self.pilot_frame_selector.begin(str(event["condition"]), live_frame)
+
+        depth_values, depth_metadata = self._capture_depth_snapshot()
+        self.outage_display_image = self.pilot_display.imageCopy(
+            0,
+            0,
+            self.pilot_display.getWidth(),
+            self.pilot_display.getHeight(),
+        )
+        if not self.outage_display_image:
+            raise RuntimeError(
+                f"Could not capture pilot display anchor for outage {event['id']}"
+            )
+        validation_capture_processing_ms = 0.0
+        if self.display_readback_validation_enabled:
+            validation_started = time.monotonic()
+            self.pilot_display.imageSave(
+                self.outage_display_image,
+                str(directory / "pilot_anchor.png"),
+            )
+            validation_capture_processing_ms += (
+                time.monotonic() - validation_started
+            ) * 1000.0
+        self.outage_current_artifact = {
+            "directory": directory,
+            "event_id": str(event["id"]),
+            "anchor_rgb": bytes(live_frame),
+            "anchor_depth_values": depth_values,
+            "anchor_depth_metadata": depth_metadata,
+            "hidden_mid_rgb": None,
+            "return_rgb": None,
+            "pilot_frames": {"pilot_anchor.png": bytes(live_frame)},
+        }
+        self.outage_artifact_records.append(self.outage_current_artifact)
+        self.pilot_display.detachCamera()
+
+        effective_condition = str(event["condition"])
+        if effective_condition == "frozen":
+            self.pilot_display.imagePaste(
+                self.outage_display_image,
+                0,
+                0,
+                False,
+            )
+        else:
+            self.pilot_display.setColor(0x000000)
+            self.pilot_display.setAlpha(1.0)
+            self.pilot_display.setOpacity(1.0)
+            self.pilot_display.fillRectangle(
+                0,
+                0,
+                self.pilot_display.getWidth(),
+                self.pilot_display.getHeight(),
+            )
+
+        command_processing_ms = (
+            (time.monotonic() - processing_started) * 1000.0
+            - validation_capture_processing_ms
+        )
+        if self.viewpoint_capture_validation_enabled:
+            self.exportImage(str(directory / "viewpoint_anchor.png"), 100)
+
+        self.last_outage_transition = {
+            "type": "start",
+            "event_id": event["id"],
+            "control_step": self.step_count,
+        }
+        total_processing_ms = (time.monotonic() - processing_started) * 1000.0
+        self._write_outage_event(
+            "start",
+            event=event,
+            effective_condition=effective_condition,
+            command_step=self.step_count,
+            visible_from_step=self.step_count + 1,
+            visible_from_sim_time_s=(self.step_count + 1) * self.time_step / 1000.0,
+            anchor_frame_id=self.outage_anchor_frame_id,
+            anchor_sim_time_s=self.outage_anchor_frame_time,
+            anchor_sha256=self.outage_anchor_sha256,
+            controller_processing_ms=command_processing_ms,
+            validation_capture_processing_ms=(
+                total_processing_ms
+                - command_processing_ms
+            ),
+            artifact_directory=str(directory.relative_to(self.run_dir)),
+            **self._outage_flight_state(),
+        )
+
+    def _finish_outage(self, event: dict, *, abort_reason: str | None = None) -> None:
+        record = self.outage_current_artifact
+        if record is not None:
+            live_frame = bytes(self.camera.getImage())
+            pilot_last, _ = self.pilot_frame_selector.select(
+                str(event["condition"]), live_frame
+            )
+            record["pilot_frames"]["pilot_last.png"] = pilot_last
+            if self.display_readback_validation_enabled:
+                self.pilot_display.imageSave(
+                    None,
+                    str(record["directory"] / "pilot_last.png"),
+                )
+            record["return_rgb"] = live_frame
+            self.outage_pending_return_captures.append(
+                (self.step_count + self.CAMERA_PERIOD_MS // self.time_step, record)
+            )
+        self._restore_live_pilot_display()
+        transition_type = "abort" if abort_reason is not None else "end"
+        actual_duration_ms = (
+            self.step_count - int(event["start_step"])
+        ) * self.time_step
+        self.last_outage_transition = {
+            "type": transition_type,
+            "event_id": event["id"],
+            "control_step": self.step_count,
+        }
+        self._write_outage_event(
+            transition_type,
+            event=event,
+            abort_reason=abort_reason,
+            command_step=self.step_count,
+            live_visible_from_step=self.step_count + 1,
+            live_visible_from_sim_time_s=(self.step_count + 1)
+            * self.time_step
+            / 1000.0,
+            actual_duration_ms=actual_duration_ms,
+            **self._outage_flight_state(),
+        )
+        self.pilot_frame_selector.end()
+        self.outage_anchor_frame_id = None
+        self.outage_anchor_frame_time = None
+        self.outage_anchor_sha256 = None
+        self.outage_artifact_dir = None
+        self.outage_current_artifact = None
+        self.outage_midpoint_saved = False
+
+    def _abort_active_outage(self, reason: str) -> None:
+        if not hasattr(self, "outage_runtime"):
+            return
+        transition = self.outage_runtime.abort(self.step_count, reason)
+        if transition is not None:
+            self._finish_outage(transition["event"], abort_reason=reason)
+
+    def _save_outage_midpoint(self) -> None:
+        if self.outage_current_artifact is None or self.outage_midpoint_saved:
+            return
+        self.outage_current_artifact["hidden_mid_rgb"] = bytes(
+            self.camera.getImage()
+        )
+        pilot_mid, _ = self.pilot_frame_selector.select(
+            self.outage_runtime.mode,
+            self.outage_current_artifact["hidden_mid_rgb"],
+        )
+        self.outage_current_artifact["pilot_frames"]["pilot_mid.png"] = pilot_mid
+        if self.display_readback_validation_enabled:
+            self.pilot_display.imageSave(
+                None,
+                str(self.outage_current_artifact["directory"] / "pilot_mid.png"),
+            )
+        if self.viewpoint_capture_validation_enabled:
+            self.exportImage(
+                str(self.outage_current_artifact["directory"] / "viewpoint_mid.png"),
+                100,
+            )
+        self.outage_midpoint_saved = True
+
+    def _capture_due_pilot_returns(self) -> None:
+        remaining = []
+        for due_step, record in self.outage_pending_return_captures:
+            if self.step_count < due_step:
+                remaining.append((due_step, record))
+                continue
+            live_frame = bytes(self.camera.getImage())
+            record["pilot_frames"]["pilot_return.png"] = live_frame
+            if self.display_readback_validation_enabled:
+                self.pilot_display.imageSave(
+                    None,
+                    str(record["directory"] / "pilot_return.png"),
+                )
+            if self.viewpoint_capture_validation_enabled:
+                self.exportImage(
+                    str(record["directory"] / "viewpoint_return.png"),
+                    100,
+                )
+        self.outage_pending_return_captures = remaining
+
+    def _flush_outage_artifacts(self) -> None:
+        if self.outage_artifacts_flushed:
+            return
+        for record in self.outage_artifact_records:
+            directory = record["directory"]
+            write_bgra_png(
+                directory / "anchor_rgb.png",
+                record["anchor_rgb"],
+                self.camera.getWidth(),
+                self.camera.getHeight(),
+            )
+            if record["hidden_mid_rgb"] is not None:
+                write_bgra_png(
+                    directory / "hidden_mid_rgb.png",
+                    record["hidden_mid_rgb"],
+                    self.camera.getWidth(),
+                    self.camera.getHeight(),
+                )
+            if record["return_rgb"] is not None:
+                write_bgra_png(
+                    directory / "return_rgb.png",
+                    record["return_rgb"],
+                    self.camera.getWidth(),
+                    self.camera.getHeight(),
+                )
+            write_depth_bundle(
+                directory,
+                "anchor_depth",
+                record["anchor_depth_values"],
+                record["anchor_depth_metadata"],
+            )
+            for filename, frame in record["pilot_frames"].items():
+                path = directory / filename
+                if not path.exists():
+                    write_bgra_png(
+                        path,
+                        frame,
+                        self.pilot_display.getWidth(),
+                        self.pilot_display.getHeight(),
+                    )
+        self.outage_artifacts_flushed = True
+
+    def _write_display_frame(
+        self,
+        live_frame: bytes,
+        live_frame_sha256: str,
+    ) -> None:
+        if self.display_frames is None or self.display_frames_file is None:
+            return
+        self.pilot_frame_id += 1
+        sim_time = self.getTime()
+        mode = self.outage_runtime.mode
+        current = self.outage_runtime.current
+        rendered, source_type = self.pilot_frame_selector.select(mode, live_frame)
+        rendered_sha256 = hashlib.sha256(rendered).hexdigest()
+        if mode == "normal":
+            source_frame_id = self.pilot_frame_id
+            source_time = sim_time
+            source_age_ms = 0.0
+            anchor_sha256 = ""
+            self.last_pilot_live_frame_id = self.pilot_frame_id
+            self.last_pilot_live_frame_time = sim_time
+            self.last_pilot_live_frame = bytes(bytearray(live_frame))
+        elif mode == "frozen" and source_type == "anchor":
+            source_frame_id = self.outage_anchor_frame_id
+            source_time = self.outage_anchor_frame_time
+            source_age_ms = (
+                -1.0
+                if source_time is None
+                else (sim_time - source_time) * 1000.0
+            )
+            anchor_sha256 = self.outage_anchor_sha256 or ""
+        else:
+            source_frame_id = ""
+            source_time = ""
+            source_age_ms = -1.0
+            anchor_sha256 = self.outage_anchor_sha256 or ""
+        mode_codes = {"normal": 0, "black": 1, "frozen": 2}
+        host_time = time.monotonic()
+        self.display_frames.writerow(
+            {
+                "pilot_frame_id": self.pilot_frame_id,
+                "control_step": self.step_count,
+                "sim_time_s": f"{sim_time:.6f}",
+                "host_monotonic_s": f"{host_time:.6f}",
+                "display_mode_code": mode_codes[mode],
+                "display_mode": mode,
+                "event_ordinal": "" if current is None else current["ordinal"],
+                "event_id": "" if current is None else current["id"],
+                "source_type": source_type,
+                "source_frame_id": source_frame_id,
+                "source_sim_time_s": source_time,
+                "source_age_ms": source_age_ms,
+                "anchor_sha256": anchor_sha256,
+                "rendered_sha256": rendered_sha256,
+                "hidden_ground_truth_sha256": live_frame_sha256,
+                "render_differs_from_ground_truth": int(
+                    rendered_sha256 != live_frame_sha256
+                ),
+                "schedule_sha256": self.outage_schedule["schedule_sha256"],
+            }
+        )
+        if (
+            host_time - self.last_display_flush_wall_time
+            >= self.TELEMETRY_FLUSH_PERIOD_SECONDS
+        ):
+            self.display_frames_file.flush()
+            self.last_display_flush_wall_time = host_time
+
+    def _update_outage_baseline(self) -> None:
+        position = self.drone_node.getPosition()
+        zone_code, _ = classify_course_zone(position, self.course_zones)
+        on_display_frame = (
+            self.step_count
+            % (self.CAMERA_PERIOD_MS // self.time_step)
+            == 0
+        )
+        live_frame = None
+        live_frame_sha256 = None
+        if on_display_frame and self.getTime() + 1e-9 >= self.CAMERA_PERIOD_MS / 1000.0:
+            live_frame = bytes(self.camera.getImage())
+            live_frame_sha256 = hashlib.sha256(live_frame).hexdigest()
+
+        # This is the frame that was visible during the Webots step that just
+        # completed. Display commands below take effect on the following step,
+        # so logging it before transitions aligns evidence with pilot exposure.
+        if (
+            on_display_frame
+            and live_frame is not None
+            and live_frame_sha256 is not None
+            and self.display_frame_logging_enabled
+        ):
+            self._write_display_frame(live_frame, live_frame_sha256)
+
+        self._capture_due_pilot_returns()
+
+        try:
+            transitions = self.outage_runtime.advance(self.step_count, zone_code)
+        except OutageRuntimeError as error:
+            self._write_outage_event("scheduler_error", message=str(error))
+            self._abort_active_outage("scheduler_error")
+            self.simulationQuit(1)
+            raise RuntimeError(
+                f"Phase 2 outage schedule failed: {error}"
+            ) from error
+        for transition in transitions:
+            if transition["type"] == "start":
+                self._begin_outage(
+                    transition["event"],
+                    live_frame,
+                    live_frame_sha256,
+                )
+            elif transition["type"] == "end":
+                self._finish_outage(transition["event"])
+
+        current = self.outage_runtime.current
+        if current is not None and not self.outage_midpoint_saved:
+            midpoint_step = int(current["start_step"]) + int(
+                current["duration_control_steps"]
+            ) // 2
+            if self.step_count >= midpoint_step:
+                self._save_outage_midpoint()
 
     def _write_telemetry(
         self,
@@ -1334,6 +2041,29 @@ class DreamModeController(Supervisor):
         input_source_code = source_codes[self.current_input_source]
         armed_input_source_code = source_codes.get(self.armed_input_source, 0)
         course_zone_id, _ = classify_course_zone(position, self.course_zones)
+        current_outage = self.outage_runtime.current
+        outage_condition_codes = {"normal": 0, "black": 1, "frozen": 2}
+        if current_outage is None:
+            outage_event_ordinal = 0
+            outage_requested_duration_ms = 0.0
+            outage_effective_duration_ms = 0.0
+            outage_elapsed_ms = 0.0
+        else:
+            outage_event_ordinal = int(current_outage["ordinal"])
+            outage_requested_duration_ms = float(
+                current_outage["requested_duration_ms"]
+            )
+            outage_effective_duration_ms = float(
+                current_outage["effective_duration_ms"]
+            )
+            outage_elapsed_ms = (
+                self.step_count - int(current_outage["start_step"])
+            ) * self.time_step
+        outage_anchor_age_ms = (
+            -1.0
+            if self.outage_anchor_frame_time is None
+            else (sim_time - self.outage_anchor_frame_time) * 1000.0
+        )
 
         row = {
             "control_step": self.step_count,
@@ -1389,6 +2119,16 @@ class DreamModeController(Supervisor):
             "input_source_code": input_source_code,
             "hid_report_age_ms": f"{hid_report_age_ms:.3f}",
             "joystick_connected": int(self.joystick is not None),
+            "outage_active": int(current_outage is not None),
+            "outage_condition_code": outage_condition_codes[
+                self.outage_runtime.mode
+            ],
+            "outage_event_ordinal": outage_event_ordinal,
+            "outage_seed": self.outage_schedule["seed"],
+            "outage_requested_duration_ms": outage_requested_duration_ms,
+            "outage_effective_duration_ms": outage_effective_duration_ms,
+            "outage_elapsed_ms": outage_elapsed_ms,
+            "outage_anchor_age_ms": outage_anchor_age_ms,
         }
         row.update(
             {f"raw_axis_{index}": raw_axes[index] for index in range(self.MAX_RAW_AXES)}
@@ -1404,6 +2144,8 @@ class DreamModeController(Supervisor):
         self.last_log_time = sim_time
 
     def run(self) -> None:
+        run_outcome = "stopped"
+        run_error = None
         try:
             while self.step(self.time_step) != -1:
                 self.step_count += 1
@@ -1495,9 +2237,11 @@ class DreamModeController(Supervisor):
                     gyro_values=gyro_values,
                 )
                 self._capture_initial_frames()
+                self._update_outage_baseline()
                 self._write_telemetry(commands, raw_axes)
 
                 if self.smoke_test_steps and self.step_count >= self.smoke_test_steps:
+                    self._flush_outage_artifacts()
                     marker = {
                         "steps": self.step_count,
                         "sim_time_s": self.getTime(),
@@ -1509,6 +2253,12 @@ class DreamModeController(Supervisor):
                         "rgb_height": self.camera.getHeight(),
                         "depth_width": self.depth.getWidth(),
                         "depth_height": self.depth.getHeight(),
+                        "pilot_display_width": self.pilot_display.getWidth(),
+                        "pilot_display_height": self.pilot_display.getHeight(),
+                        "outage_mode": self.outage_mode,
+                        "outage_schedule_sha256": self.outage_schedule[
+                            "schedule_sha256"
+                        ],
                         "drone_z_m": self.drone_node.getPosition()[2],
                         "yaw_rate_rad_s": self.drone_node.getVelocity()[5],
                         "body_roll_rate_rad_s": self.last_gyro_values[0],
@@ -1524,14 +2274,47 @@ class DreamModeController(Supervisor):
                     if self.telemetry_file is not None:
                         self.telemetry_file.flush()
                     print(f"SMOKE_TEST_OK steps={self.step_count} log={self.run_dir}")
+                    run_outcome = "completed"
                     self.simulationQuit(0)
                     break
+        except Exception as error:
+            run_outcome = "error"
+            run_error = f"{type(error).__name__}: {error}"
+            raise
         finally:
             self._stop_motors(best_effort=True)
+            try:
+                self._abort_active_outage("controller_exit")
+                self._write_outage_event(
+                    "run_end",
+                    outcome=run_outcome,
+                    error=run_error,
+                    scheduled_event_count=len(self.outage_runtime.events),
+                    started_event_count=len(self.outage_runtime.started_ids),
+                    ended_event_count=len(self.outage_runtime.ended_ids),
+                    aborted_event_count=len(self.outage_runtime.aborted_ids),
+                    pending_event_count=len(self.outage_runtime.pending),
+                )
+                self._restore_live_pilot_display()
+                self._flush_outage_artifacts()
+            except (OSError, RuntimeError, ValueError):
+                pass
             if self.telemetry_file is not None:
                 try:
                     self.telemetry_file.flush()
                     self.telemetry_file.close()
+                except (OSError, ValueError):
+                    pass
+            if self.display_frames_file is not None:
+                try:
+                    self.display_frames_file.flush()
+                    self.display_frames_file.close()
+                except (OSError, ValueError):
+                    pass
+            if self.outage_events_file is not None:
+                try:
+                    self.outage_events_file.flush()
+                    self.outage_events_file.close()
                 except (OSError, ValueError):
                     pass
             self._close_joystick()

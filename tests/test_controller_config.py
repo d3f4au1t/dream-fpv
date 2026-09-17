@@ -24,11 +24,15 @@ class ControllerConfigTests(unittest.TestCase):
     def test_frozen_apparatus_files_are_explicit(self):
         self.assertEqual(
             self.config["apparatus_manifest"],
-            "config/apparatus_v1.json",
+            "config/apparatus_v2.json",
         )
         self.assertEqual(
             self.config["course_zones_file"],
             "config/course_zones.json",
+        )
+        self.assertEqual(
+            self.config["outage_baseline_config"],
+            "config/outage_baselines_v1.json",
         )
 
     def test_user_confirmed_axis_inversions_are_locked(self):

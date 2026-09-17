@@ -35,10 +35,23 @@ class ApparatusFreezeTests(unittest.TestCase):
 
     def test_frozen_identity_and_seed_are_locked(self):
         self.assertEqual(self.apparatus["apparatus_id"], "dream_fpv_webots")
-        self.assertEqual(self.apparatus["version"], "1.0.0")
+        self.assertEqual(self.apparatus["version"], "2.0.0")
         self.assertEqual(self.apparatus["status"], "frozen")
         self.assertEqual(self.apparatus["random_seed"], 1907)
         self.assertEqual(len(self.manifest_hash), 64)
+
+    def test_phase_one_manifest_remains_as_a_historical_record(self):
+        phase_one = json.loads(
+            (PROJECT_ROOT / "config" / "apparatus_v1.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(phase_one["version"], "1.0.0")
+        self.assertEqual(phase_one["status"], "frozen")
+        self.assertEqual(
+            self.apparatus["inherits"]["git_tag"],
+            "apparatus-v1.0.0",
+        )
 
     def test_every_authoritative_file_matches_its_frozen_hash(self):
         self.assertGreaterEqual(len(self.locked_hashes), 8)

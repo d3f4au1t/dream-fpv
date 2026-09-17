@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "apparatus_id": "dream_fpv_webots",
+  "version": "2.0.0",
+  "status": "frozen",
+  "frozen_on": "2026-09-16",
+  "random_seed": 1907,
+  "inherits": {
+    "apparatus_manifest": "config/apparatus_v1.json",
+    "git_tag": "apparatus-v1.0.0",
+    "flight_model_changed": false,
+    "course_changed": false
+  },
+  "course_zones_file": "config/course_zones.json",
+  "controller_calibration_file": "config/apex_t19_calibration_v1.json",
+  "outage_baseline_config_file": "config/outage_baselines_v1.json",
+  "simulator": {
+    "name": "Webots",
+    "tested_version": "R2025a",
+    "basic_time_step_ms": 8,
+    "tested_platform": "macOS 26.3 (25D125)",
+    "python_version": "3.12.4"
+  },
+  "timing": {
+    "rgb_period_ms": 16,
+    "depth_period_ms": 64,
+    "default_telemetry_period_ms": 40
+  },
+  "sensors": {
+    "camera_translation_m": [0.065, 0.0, 0.02],
+    "camera_rotation_axis_angle": [0.0, 1.0, 0.0, -0.3839724354387525],
+    "field_of_view_rad": 2.0943951,
+    "rgb_resolution": [480, 270],
+    "depth_resolution": [320, 180],
+    "depth_range_m": [0.05, 20.0]
+  },
+  "pilot_display": {
+    "device_name": "pilot display",
+    "resolution": [480, 270],
+    "period_ms": 16,
+    "translation_m": [0.1122863766, 0.0, 0.0391049363],
+    "rotation_axis_angle": [0.0, 1.0, 0.0, -0.3839724354387525],
+    "surface_size_m": [0.177, 0.1],
+    "viewpoint_clip_range_m": [0.05, 0.052],
+    "research_sensor_visibility": false,
+    "display_overlay_may_be_visible": true
+  },
+  "video_outages": {
+    "conditions": ["black", "frozen"],
+    "requested_durations_ms": [100, 250, 500, 750, 1000],
+    "effective_durations_ms": [112, 256, 512, 752, 1008],
+    "interval_rule": "half-open [start_step, end_step)",
+    "trigger_alignment_ms": 64,
+    "physics_continues": true,
+    "hidden_rgbd_continues": true
+  },
+  "course": {
+    "nominal_route_length_m": 81.15,
+    "floor_size_m": [50.0, 30.0],
+    "recovery_inset_from_wall_face_m": 0.4
+  },
+  "calibration": {
+    "level": "simulator-reference-and-user-tuned",
+    "physical_digital_twin_validated": false,
+    "controller_mapping": "Mode 2 mapping and polarity confirmed for the validation controller",
+    "limitations": [
+      "Motor, inertia, drag, propwash, and collision parameters have not been identified from the physical airframe.",
+      "The model must not be described as feeling exactly like, or predicting the dynamics of, the physical drone.",
+      "Phase 2 validates black and frozen-video interruption baselines, not predictive rendering or real radio-link behavior.",
+      "Each controller model must be calibrated before formal participant trials."
+    ]
+  },
+  "locked_files": {
+    "worlds/dream_mode_research.wbt": "ea3f06a4615d186d061d8b5da3747c7d5aa87e56f665678663dd0c0dea19c2c5",
+    "protos/FpvResearchQuad.proto": "d23616a115cc0f40d0426b809c504113ebde4c001cbab9ff34235753291eadfd",
+    "config/controller.json": "3697b431b1683c903b06ce4358c55fb9a0faf1fcca47f90cc72f7ea273f67342",
+    "config/course_zones.json": "7f2cb474bf63bea887715bd76294d73fd6ed101b46e82b1289a93e46eb8abea5",
+    "config/apex_t19_calibration_v1.json": "065f0d5a55a42a3da875332a835a3238b7876df0aa6480a6470d87498be6630c",
+    "config/outage_baselines_v1.json": "a8c421f17a7f2a4fe3c393c32e769a8720d4c902e04143bdbea97b2bab28bc3f",
+    "controllers/dream_mode_controller/dream_mode_controller.py": "8c9b0953c05ae2a3edc8e81e09913ea9839c69df239349faae5873537ecf4cb2",
+    "controllers/dream_mode_controller/input_mapping.py": "cf4d6cbf519f7ae5e1068997875072c27325c8f9305c71c77ec0f239c37f1fbf",
+    "controllers/dream_mode_controller/apparatus.py": "0eb99b406b7d1961f9f7b831b31306542c1a2fc059d32f0a899b9ce1fc6c6892",
+    "controllers/dream_mode_controller/outage_baselines.py": "6dddb7bb19eb002141522d7dda2d7ae4280a24cba29c86dd782283976c3edbf4",
+    "controllers/dream_mode_controller/outage_artifacts.py": "779f47191477d52c3f5a8985fdd14606441b26a2286309b20970bc005912a75d",
+    "controllers/dream_mode_controller/runtime.ini": "bf78d1a644c1a533d7f9c04c963653e0e6a5e63c6611453c7d1f573625df8f4b",
+    "requirements.txt": "6e78c6c5a61dbebf36f570a14685c795efcdb3d8bb6b6118b6aa78dd0aca54d4"
+  }
+}

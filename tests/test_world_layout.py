@@ -32,6 +32,9 @@ class WorldLayoutTests(unittest.TestCase):
         cls.world = (PROJECT_ROOT / "worlds" / "dream_mode_research.wbt").read_text(
             encoding="utf-8"
         )
+        cls.project = (
+            PROJECT_ROOT / "worlds" / ".dream_mode_research.wbproj"
+        ).read_text(encoding="utf-8")
         cls.proto = (PROJECT_ROOT / "protos" / "FpvResearchQuad.proto").read_text(
             encoding="utf-8"
         )
@@ -277,8 +280,41 @@ class WorldLayoutTests(unittest.TestCase):
         self.assertIn('followType "Mounted Shot"', self.world)
         self.assertIn("followSmoothness 0", self.world)
         self.assertIn("position -6.935 0 0.05", self.world)
+        self.assertIn("near 0.05", self.world)
+        self.assertIn("far 0.052", self.world)
         self.assertEqual(self.world.count("translation 0.065 0 0.02"), 2)
-        self.assertEqual(self.world.count("rotation 0 1 0 -0.3839724354387525"), 2)
+        self.assertEqual(self.world.count("rotation 0 1 0 -0.3839724354387525"), 3)
+
+    def test_pilot_view_is_a_camera_backed_physical_display(self):
+        display_match = re.search(
+            r'Display\s*\{(?P<body>.*?)\n\s*\}\n\s*RangeFinder\s*\{',
+            self.world,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(display_match)
+        display = display_match.group("body")
+        self.assertIn('name "pilot display"', display)
+        self.assertIn("translation 0.1122863766 0 0.0391049363", display)
+        self.assertIn("rotation 0 1 0 -0.3839724354387525", display)
+        self.assertIn("width 480", display)
+        self.assertIn("height 270", display)
+        self.assertNotIn("Group {", display)
+        self.assertIn("appearance PBRAppearance {", display)
+        self.assertIn("baseColorMap ImageTexture {", display)
+        self.assertIn("roughness 1", display)
+        self.assertIn("metalness 0", display)
+        self.assertIn("geometry IndexedFaceSet {", display)
+        self.assertIn("0 0.0885 0.05", display)
+        self.assertIn("0 -0.0885 -0.05", display)
+        self.assertNotIn("boundingObject", display)
+
+        # Rendering-device overlays would either bypass the emulator or add a
+        # duplicate pane over the physical FPV screen.
+        for device in ("depth", "pilot display", "research camera"):
+            self.assertRegex(
+                self.project,
+                rf"renderingDevicePerspectives: Dream Mode Drone:{re.escape(device)};0;",
+            )
 
     def test_only_named_research_camera_is_present(self):
         self.assertEqual(self.world.count("Camera {"), 1)

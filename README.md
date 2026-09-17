@@ -1,10 +1,10 @@
 # Dream FPV
 
-Dream FPV is a Webots-based FPV simulator for developing and testing predictive-flight displays. It includes an acro quad model, a technical practice course, synchronized RGB/depth capture, controller input, recovery logic, and timestamped telemetry.
+Dream FPV is a Webots-based FPV research simulator for controlled video-loss experiments. It includes an acro quad model, a technical practice course, a camera-backed pilot view, synchronized RGB/depth capture, external-controller input, recovery logic, and timestamped telemetry.
 
-The Phase 1 baseline is frozen as `apparatus-v1.0.0`. The tagged build passed the startup smoke test and all 72 flight-dynamics acceptance scenarios. See [the apparatus record](docs/APPARATUS_V1.md) and [validation summary](validation/apparatus-v1.0.0.json) for the exact configuration and test results.
+The frozen Phase 1 flight baseline is tagged `apparatus-v1.0.0`. Phase 2 keeps that flight model and course unchanged and adds reproducible black-screen and frozen-frame outage baselines. See the [Phase 1 apparatus record](docs/APPARATUS_V1.md), [Phase 2 apparatus record](docs/APPARATUS_V2.md), and the corresponding validation summaries under [`validation/`](validation/).
 
-This project is a research simulator, not a validated digital twin of a physical aircraft.
+This is an experimental software apparatus, not a validated digital twin of a physical aircraft.
 
 ## Requirements
 
@@ -47,7 +47,7 @@ The main view is mounted to the aircraft and matches the research camera: 120° 
 
 ## Input
 
-Manual input is available through the keyboard or a supported HID controller adapter. Keyboard input is for testing purposes only, and should not be for normal usage.
+Manual input is available through the keyboard or a supported USB HID controller. Keyboard input is intended for development and automated checks, not normal flying or participant trials.
 
 Set `DREAM_MODE_DISABLE_JOYSTICK=1` before launch to force keyboard input.
 
@@ -58,7 +58,7 @@ Controller support has two parts:
 1. Device discovery and HID report decoding in `dream_mode_controller.py`.
 2. Axis indexes, inversion, range, and deadzone in `config/controller.json`.
 
-Do not assume two USB radios or gamepads use the same HID report layout. A new controller may need a device matcher and report decoder before its axes can be configured. The adapter intentionally ignores unknown HID devices instead of guessing and sending unsafe commands to the flight model.
+USB radios and gamepads do not share one report layout. Each controller model must be identified and calibrated before use; some devices also need a small report decoder before their axes can be configured. Unknown HID devices are ignored rather than mapped by guesswork.
 
 For a Mode 2 controller, verify these channels before flying:
 
@@ -69,9 +69,7 @@ For a Mode 2 controller, verify these channels before flying:
 | Right vertical | Pitch |
 | Right horizontal | Roll |
 
-The default Phase 1 mapping is roll, pitch, throttle, and yaw on axes 0–3. Roll, pitch, and yaw are inverted; throttle is not. Treat that as a reference profile, not a universal controller layout.
-
-The currently shipped HID matcher recognizes the controller used to validate apparatus v1.0.0. Its calibration record remains under `config/` for reproducibility. Supporting another controller means validating its identity, report format, endpoints, center positions, mapping, and polarity before collecting research data.
+The checked-in reference mapping uses axes 0–3 for roll, pitch, throttle, and yaw. Roll, pitch, and yaw are inverted; throttle is not. This is a calibration profile, not a universal controller layout. Before collecting research data with another device, verify its identity, report format, endpoints, center positions, channel mapping, polarity, and deadzone. Calibration records remain under `config/` so completed runs can be reproduced.
 
 When a supported external controller is active, keyboard flight axes and throttle are ignored. Disconnect the device or launch with `DREAM_MODE_DISABLE_JOYSTICK=1` to use the keyboard.
 
@@ -87,9 +85,7 @@ The frozen rate profile is:
 | Pitch | 1.25 | 0.68 | 0.22 | 781.25°/s |
 | Yaw | 1.25 | 0.55 | 0.28 | 555.56°/s |
 
-Reference model is the APEX 1.6 inch Raven 2.0 cinewhoop done. 
-
-Throttle commands motor thrust directly; there is no altitude hold. The reference model is a 198 g, 2.5-inch, 4S quad with 5000 KV motors and an approximately 32% hover command.
+Throttle commands motor thrust directly; there is no altitude hold. The reference physics profile is a 198 g, 2.5-inch, 4S quad with 5000 KV motors and an approximately 32% hover command. Its coefficients were tuned as a simulator reference and have not been identified from physical-airframe measurements.
 
 Move throttle fully low after a simulator reset to arm. Boundary exits, invalid physics, and a settled inverted crash return the aircraft to the start and disarm it. After recovery, center the attitude sticks and hold throttle low for 0.15 seconds. Input loss requires a deliberate above-10%-then-low throttle cycle from the reconnected source.
 
@@ -107,6 +103,49 @@ The course covers roughly 81 metres inside a 50 × 30 metre arena. It mixes open
 
 Visible course structures have matching collision geometry. Spatial zone IDs label the major sections for telemetry, but they do not by themselves prove that a gate was crossed in the correct direction.
 
+## Phase 2 video-outage baselines
+
+Phase 2 routes the pilot view through a 480 × 270 camera-backed display and interrupts that display while flight physics and control input continue normally. The hidden research RGB/depth sensors also continue sampling so the interrupted view can be compared with ground truth after the run.
+
+Two baseline conditions are implemented:
+
+- `black` replaces the pilot image with black;
+- `frozen` holds the last live frame captured at outage onset.
+
+The requested durations are quantized upward to the 16 ms display period. Both the requested and realized values are recorded.
+
+| Requested | Realized | Display frames |
+|---:|---:|---:|
+| 100 ms | 112 ms | 7 |
+| 250 ms | 256 ms | 16 |
+| 500 ms | 512 ms | 32 |
+| 750 ms | 752 ms | 47 |
+| 1000 ms | 1008 ms | 63 |
+
+Normal launches keep the outage emulator off:
+
+```bash
+./scripts/run_webots.sh
+```
+
+Use the Phase 2 launcher to run an outage schedule:
+
+```bash
+# Fixed ten-event schedule: every duration in both conditions
+./scripts/run_phase2.sh deterministic
+
+# Seeded selection of six course zones, durations, and conditions
+./scripts/run_phase2.sh randomized
+
+# Keep the schedule and force every event to one condition
+./scripts/run_phase2.sh deterministic black
+./scripts/run_phase2.sh randomized frozen
+```
+
+The deterministic schedule places one condition-duration pair in each named course section. The randomized schedule makes a repeatable seeded selection from those sections. Events are triggered on zone entry and aligned to a synchronized 64 ms RGB/depth anchor, so an event only occurs if the aircraft reaches its trigger zone. The materialized schedule and its SHA-256 digest are saved with the run.
+
+Phase 2 is a video-interruption baseline. It does not predict the missing view, estimate uncertainty, or model an RF/video link.
+
 ## Run data
 
 Each run creates `logs/<UTC timestamp>/` with:
@@ -119,6 +158,16 @@ Each run creates `logs/<UTC timestamp>/` with:
 - `depth_initial.png` — viewable initial depth image;
 - `depth_initial.f32` — initial depth values as native-endian float32 metres;
 - `depth_initial.json` — dimensions, range, encoding, camera parameters, and provenance for the depth data.
+
+Phase 2 runs also include:
+
+- `outage_schedule.json` — the fully materialized schedule, seed, quantized timing, trigger details, and schedule digest;
+- `outage_events.jsonl` — ordered run, onset, recovery, abort, scheduler-error, and completion records with simulator and host timestamps;
+- `display_frames.csv` — one row per 16 ms pilot frame, including its visible mode, source frame, source age, rendered digest, and hidden-ground-truth digest;
+- outage fields in `telemetry.csv` — active state, condition, event ordinal, seed, requested/effective duration, elapsed time, and anchor age;
+- `outages/<event>/` — onset RGB and depth, hidden midpoint and return RGB, plus pilot images at onset, midpoint, final interrupted frame, and return to live video.
+
+Image buffers are captured at the experimental instant and encoded after the flight, keeping PNG compression and routine artifact writes out of the control path.
 
 Keep the complete run directory together. The CSV relies on its manifest for zone names and cryptographic provenance.
 
@@ -137,6 +186,14 @@ Run the startup smoke test:
 ./scripts/smoke_test.sh
 ```
 
+Run the end-to-end Phase 2 outage acceptance test:
+
+```bash
+./scripts/outage_baseline_test.py
+```
+
+This runs two isolated replays of all ten condition-duration pairs and checks schedule reproducibility, exact display-frame intervals, pilot-display output, hidden ground truth, telemetry, artifacts, and return to live video.
+
 Run the full 72-scenario flight-dynamics suite:
 
 ```bash
@@ -152,6 +209,7 @@ config/                         frozen apparatus, controls, zones, calibration
 controllers/dream_mode_controller/
                                 Webots controller and input mapping
 docs/APPARATUS_V1.md            Phase 1 apparatus specification
+docs/APPARATUS_V2.md            Phase 2 outage-baseline specification
 protos/FpvResearchQuad.proto    aircraft model
 scripts/                        launcher and validation tools
 tests/                          non-GUI unit and layout tests
@@ -162,8 +220,9 @@ worlds/dream_mode_research.wbt  course and simulator world
 ## Known limitations
 
 - The physical coefficients have not been identified from measured airframe data.
-- Continuous image recording, outage injection, predictive display rendering, and uncertainty cues are not part of Phase 1.
-- The current direct-HID adapter does not automatically support arbitrary controllers.
+- Phase 2 supports controlled black and frozen frames, not continuous encoded-video capture, packet loss, RF propagation, decoder behavior, or latency/jitter emulation.
+- Predictive display rendering and uncertainty cues are not implemented.
+- The direct-HID adapter requires a validated identity, decoder, and calibration profile for each controller model; arbitrary devices are not mapped automatically.
 - The launcher and end-to-end validation scripts are macOS-specific.
 - External Webots mesh assets are pinned to R2025a URLs but are not vendored in this repository.
 

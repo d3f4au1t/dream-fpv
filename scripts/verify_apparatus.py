@@ -17,6 +17,11 @@ CONTROLLER_DIR = PROJECT_ROOT / "controllers" / "dream_mode_controller"
 sys.path.insert(0, str(CONTROLLER_DIR))
 try:
     from apparatus import ApparatusIntegrityError, load_and_verify_apparatus
+    from outage_baselines import (
+        materialize_schedule,
+        validate_config as validate_outage_config,
+        validate_zone_references,
+    )
 finally:
     sys.path.remove(str(CONTROLLER_DIR))
 
@@ -62,11 +67,35 @@ def vector_from(block: str, field: str, count: int) -> list[float]:
 
 
 def device_block(world: str, device_type: str, name: str) -> str:
-    pattern = rf'{device_type}\s*\{{(?:(?!\n\s*\}}).)*?name\s+"{re.escape(name)}"(?:(?!\n\s*\}}).)*?\n\s*\}}'
-    match = re.search(pattern, world, re.DOTALL)
-    if match is None:
-        raise SemanticVerificationError(f'Could not find {device_type} "{name}"')
-    return match.group(0)
+    header = re.compile(rf"\b{re.escape(device_type)}\s*\{{")
+    name_pattern = re.compile(rf'^\s*name\s+"{re.escape(name)}"\s*$', re.MULTILINE)
+    for match in header.finditer(world):
+        opening = world.find("{", match.start())
+        depth = 0
+        in_string = False
+        escaped = False
+        for index in range(opening, len(world)):
+            character = world[index]
+            if in_string:
+                if escaped:
+                    escaped = False
+                elif character == "\\":
+                    escaped = True
+                elif character == '"':
+                    in_string = False
+                continue
+            if character == '"':
+                in_string = True
+            elif character == "{":
+                depth += 1
+            elif character == "}":
+                depth -= 1
+                if depth == 0:
+                    block = world[match.start() : index + 1]
+                    if name_pattern.search(block):
+                        return block
+                    break
+    raise SemanticVerificationError(f'Could not find {device_type} "{name}"')
 
 
 def controller_constants(controller_source: str) -> dict[str, float]:
@@ -198,6 +227,137 @@ def verify_semantic_claims(apparatus: dict, zones: dict, config: dict) -> None:
         if name not in constants:
             raise SemanticVerificationError(f"Controller constant {name} is missing")
         require_close(constants[name], expected, f"controller {name}")
+
+    if apparatus.get("version", "").startswith("2."):
+        outage_relative = apparatus.get("outage_baseline_config_file")
+        if outage_relative != config.get("outage_baseline_config"):
+            raise SemanticVerificationError(
+                "Outage configuration references disagree"
+            )
+        outage_config = json.loads(
+            (PROJECT_ROOT / outage_relative).read_text(encoding="utf-8")
+        )
+        validate_outage_config(outage_config)
+        deterministic_schedule = materialize_schedule(
+            outage_config,
+            "deterministic",
+        )
+        randomized_schedule = materialize_schedule(
+            outage_config,
+            "randomized",
+        )
+        validate_zone_references(outage_config, deterministic_schedule, zones)
+        validate_zone_references(outage_config, randomized_schedule, zones)
+
+        outage_claim = apparatus.get("video_outages", {})
+        if outage_claim.get("conditions") != outage_config.get("conditions"):
+            raise SemanticVerificationError("Outage condition claims disagree")
+        if outage_claim.get("requested_durations_ms") != outage_config["timing"].get(
+            "durations_ms"
+        ):
+            raise SemanticVerificationError("Requested outage durations disagree")
+        effective = [
+            int(event["effective_duration_ms"])
+            for event in deterministic_schedule["events"][::2]
+        ]
+        if outage_claim.get("effective_durations_ms") != effective:
+            raise SemanticVerificationError("Effective outage durations disagree")
+        if outage_claim.get("trigger_alignment_ms") != outage_config["timing"].get(
+            "rgbd_anchor_period_ms"
+        ):
+            raise SemanticVerificationError("Outage trigger alignment disagrees")
+        if outage_config["randomized"]["event_count"] >= len(
+            outage_config["randomized"]["eligible_triggers"]
+        ):
+            raise SemanticVerificationError(
+                "Randomized schedule must select a proper trigger subset"
+            )
+
+        pilot = apparatus.get("pilot_display", {})
+        display = device_block(world, "Display", pilot.get("device_name", ""))
+        for actual, expected in zip(
+            vector_from(display, "translation", 3),
+            pilot["translation_m"],
+        ):
+            require_close(actual, expected, "pilot display translation")
+        for actual, expected in zip(
+            vector_from(display, "rotation", 4),
+            pilot["rotation_axis_angle"],
+        ):
+            require_close(actual, expected, "pilot display rotation")
+        require_close(
+            number_from(display, r"^\s*width\s+([-+0-9.eE]+)", "width"),
+            pilot["resolution"][0],
+            "pilot display width",
+        )
+        require_close(
+            number_from(display, r"^\s*height\s+([-+0-9.eE]+)", "height"),
+            pilot["resolution"][1],
+            "pilot display height",
+        )
+        if "geometry IndexedFaceSet" not in display:
+            raise SemanticVerificationError("Pilot display surface is missing")
+        for token in (
+            "appearance PBRAppearance",
+            "baseColorMap ImageTexture",
+            "roughness 1",
+            "metalness 0",
+        ):
+            if token not in display:
+                raise SemanticVerificationError(
+                    f"Pilot display texture surface is missing {token!r}"
+                )
+        if "Group {" in display:
+            raise SemanticVerificationError(
+                "Pilot display texture Shape must be a direct Display child"
+            )
+        half_width = float(pilot["surface_size_m"][0]) / 2.0
+        half_height = float(pilot["surface_size_m"][1]) / 2.0
+        for token in (
+            f"0 {half_width:g} {half_height:g}",
+            f"0 -{half_width:g} -{half_height:g}",
+        ):
+            if token not in world:
+                raise SemanticVerificationError(
+                    "Pilot display surface dimensions disagree"
+                )
+
+        viewpoint_match = re.search(
+            r"DEF FPV_VIEW Viewpoint\s*\{(?P<body>.*?)\n\}",
+            world,
+            re.DOTALL,
+        )
+        if viewpoint_match is None:
+            raise SemanticVerificationError("FPV Viewpoint is missing")
+        viewpoint = viewpoint_match.group("body")
+        clip_near, clip_far = pilot["viewpoint_clip_range_m"]
+        require_close(
+            number_from(viewpoint, r"^\s*near\s+([-+0-9.eE]+)", "near"),
+            clip_near,
+            "viewpoint near",
+        )
+        require_close(
+            number_from(viewpoint, r"^\s*far\s+([-+0-9.eE]+)", "far"),
+            clip_far,
+            "viewpoint far",
+        )
+
+        project_view = (
+            PROJECT_ROOT / "worlds" / ".dream_mode_research.wbproj"
+        ).read_text(encoding="utf-8")
+        for device in ("depth", "pilot display", "research camera"):
+            expected = (
+                "renderingDevicePerspectives: "
+                f"Dream Mode Drone:{device};0;"
+            )
+            if expected not in project_view:
+                raise SemanticVerificationError(
+                    f"Rendering-device overlay is not hidden: {device}"
+                )
+        if source.count("setVisibility") < 2:
+            raise SemanticVerificationError(
+                "Pilot display is not hidden from both research sensors"
+            )
 
     if platform.python_version() != simulator["python_version"]:
         raise SemanticVerificationError(

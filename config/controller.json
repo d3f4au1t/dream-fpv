@@ -1,6 +1,7 @@
 {
-  "apparatus_manifest": "config/apparatus_v1.json",
+  "apparatus_manifest": "config/apparatus_v2.json",
   "course_zones_file": "config/course_zones.json",
+  "outage_baseline_config": "config/outage_baselines_v1.json",
   "axis_range": 32767,
   "deadzone": 0.02,
   "joystick_stale_timeout_seconds": 0.25,

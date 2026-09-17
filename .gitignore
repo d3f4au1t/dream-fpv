@@ -7,3 +7,4 @@ logs/
 references/*.pdf
 worlds/.*.jpg
 worlds/.*.wbproj
+!worlds/.dream_mode_research.wbproj

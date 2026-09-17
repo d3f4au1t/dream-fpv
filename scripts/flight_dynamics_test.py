@@ -46,6 +46,8 @@ EXPECTED_RATES = {
 
 with (PROJECT_ROOT / "config" / "controller.json").open(encoding="utf-8") as file:
     CONFIG = json.load(file)
+with (PROJECT_ROOT / CONFIG["apparatus_manifest"]).open(encoding="utf-8") as file:
+    SELECTED_APPARATUS = json.load(file)
 FLIGHT_PROFILE = CONFIG["flight_profile"]
 IDLE_SPEED = float(FLIGHT_PROFILE["motor_idle_speed"])
 MAX_MOTOR_SPEED = float(FLIGHT_PROFILE["motor_max_speed"])
@@ -657,7 +659,10 @@ def _run_scenario_once(scenario: Scenario, log_dir: Path) -> Result:
     with run_manifest_path.open(encoding="utf-8") as manifest_file:
         run_manifest = json.load(manifest_file)
     apparatus = run_manifest.get("apparatus", {})
-    if apparatus.get("id") != "dream_fpv_webots" or apparatus.get("version") != "1.0.0":
+    if (
+        apparatus.get("id") != SELECTED_APPARATUS.get("apparatus_id")
+        or apparatus.get("version") != SELECTED_APPARATUS.get("version")
+    ):
         raise RuntimeError(f"unexpected apparatus identity: {apparatus}")
     fingerprint = run_manifest.get("run_fingerprint_sha256", "")
     if len(fingerprint) != 64 or any(

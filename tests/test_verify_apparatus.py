@@ -18,8 +18,13 @@ SPEC.loader.exec_module(VERIFY_MODULE)
 class VerifyApparatusTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        controller_config = json.loads(
+            (PROJECT_ROOT / "config" / "controller.json").read_text(
+                encoding="utf-8"
+            )
+        )
         cls.apparatus = json.loads(
-            (PROJECT_ROOT / "config" / "apparatus_v1.json").read_text(
+            (PROJECT_ROOT / controller_config["apparatus_manifest"]).read_text(
                 encoding="utf-8"
             )
         )

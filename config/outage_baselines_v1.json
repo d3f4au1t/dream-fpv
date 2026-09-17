@@ -1,0 +1,210 @@
+{
+  "schema_version": 1,
+  "experiment_id": "dream_mode_outage_baselines",
+  "version": "1.0.0",
+  "random_seed": 2907,
+  "timing": {
+    "control_step_ms": 8,
+    "display_period_ms": 16,
+    "rgbd_anchor_period_ms": 64,
+    "durations_ms": [100, 250, 500, 750, 1000]
+  },
+  "conditions": ["black", "frozen"],
+  "deterministic_events": [
+    {
+      "id": "baseline_001",
+      "condition": "black",
+      "duration_ms": 100,
+      "trigger": {
+        "type": "zone_entry",
+        "zone_id": "start_straight",
+        "zone_code": 1,
+        "visit": 1,
+        "delay_ms": 2000
+      }
+    },
+    {
+      "id": "baseline_002",
+      "condition": "frozen",
+      "duration_ms": 100,
+      "trigger": {
+        "type": "zone_entry",
+        "zone_id": "occlusion_turn",
+        "zone_code": 2,
+        "visit": 1,
+        "delay_ms": 0
+      }
+    },
+    {
+      "id": "baseline_003",
+      "condition": "black",
+      "duration_ms": 250,
+      "trigger": {
+        "type": "zone_entry",
+        "zone_id": "checkpoint_turn",
+        "zone_code": 3,
+        "visit": 1,
+        "delay_ms": 0
+      }
+    },
+    {
+      "id": "baseline_004",
+      "condition": "frozen",
+      "duration_ms": 250,
+      "trigger": {
+        "type": "zone_entry",
+        "zone_id": "slalom",
+        "zone_code": 4,
+        "visit": 1,
+        "delay_ms": 0
+      }
+    },
+    {
+      "id": "baseline_005",
+      "condition": "black",
+      "duration_ms": 500,
+      "trigger": {
+        "type": "zone_entry",
+        "zone_id": "over_under",
+        "zone_code": 5,
+        "visit": 1,
+        "delay_ms": 0
+      }
+    },
+    {
+      "id": "baseline_006",
+      "condition": "frozen",
+      "duration_ms": 500,
+      "trigger": {
+        "type": "zone_entry",
+        "zone_id": "raised_gate",
+        "zone_code": 6,
+        "visit": 1,
+        "delay_ms": 0
+      }
+    },
+    {
+      "id": "baseline_007",
+      "condition": "black",
+      "duration_ms": 750,
+      "trigger": {
+        "type": "zone_entry",
+        "zone_id": "gravity_gate",
+        "zone_code": 7,
+        "visit": 1,
+        "delay_ms": 0
+      }
+    },
+    {
+      "id": "baseline_008",
+      "condition": "frozen",
+      "duration_ms": 750,
+      "trigger": {
+        "type": "zone_entry",
+        "zone_id": "reverse_l",
+        "zone_code": 8,
+        "visit": 1,
+        "delay_ms": 0
+      }
+    },
+    {
+      "id": "baseline_009",
+      "condition": "black",
+      "duration_ms": 1000,
+      "trigger": {
+        "type": "zone_entry",
+        "zone_id": "stacked_tower",
+        "zone_code": 9,
+        "visit": 1,
+        "delay_ms": 0
+      }
+    },
+    {
+      "id": "baseline_010",
+      "condition": "frozen",
+      "duration_ms": 1000,
+      "trigger": {
+        "type": "zone_entry",
+        "zone_id": "finish",
+        "zone_code": 10,
+        "visit": 1,
+        "delay_ms": 0
+      }
+    }
+  ],
+  "randomized": {
+    "event_count": 6,
+    "eligible_triggers": [
+      {
+        "type": "zone_entry",
+        "zone_id": "start_straight",
+        "zone_code": 1,
+        "visit": 1,
+        "delay_ms": 2000
+      },
+      {
+        "type": "zone_entry",
+        "zone_id": "occlusion_turn",
+        "zone_code": 2,
+        "visit": 1,
+        "delay_ms": 0
+      },
+      {
+        "type": "zone_entry",
+        "zone_id": "checkpoint_turn",
+        "zone_code": 3,
+        "visit": 1,
+        "delay_ms": 0
+      },
+      {
+        "type": "zone_entry",
+        "zone_id": "slalom",
+        "zone_code": 4,
+        "visit": 1,
+        "delay_ms": 0
+      },
+      {
+        "type": "zone_entry",
+        "zone_id": "over_under",
+        "zone_code": 5,
+        "visit": 1,
+        "delay_ms": 0
+      },
+      {
+        "type": "zone_entry",
+        "zone_id": "raised_gate",
+        "zone_code": 6,
+        "visit": 1,
+        "delay_ms": 0
+      },
+      {
+        "type": "zone_entry",
+        "zone_id": "gravity_gate",
+        "zone_code": 7,
+        "visit": 1,
+        "delay_ms": 0
+      },
+      {
+        "type": "zone_entry",
+        "zone_id": "reverse_l",
+        "zone_code": 8,
+        "visit": 1,
+        "delay_ms": 0
+      },
+      {
+        "type": "zone_entry",
+        "zone_id": "stacked_tower",
+        "zone_code": 9,
+        "visit": 1,
+        "delay_ms": 0
+      },
+      {
+        "type": "zone_entry",
+        "zone_id": "finish",
+        "zone_code": 10,
+        "visit": 1,
+        "delay_ms": 0
+      }
+    ]
+  }
+}

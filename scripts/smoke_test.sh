@@ -13,6 +13,9 @@ webots_pid=""
 port=""
 keep_smoke="${DREAM_MODE_KEEP_SMOKE:-0}"
 unset DREAM_MODE_KEEP_SMOKE
+unset DREAM_MODE_OUTAGE_MODE DREAM_MODE_OUTAGE_CONDITION
+unset DREAM_MODE_OUTAGE_SEED DREAM_MODE_OUTAGE_SCRIPT
+unset DREAM_MODE_LOG_DISPLAY_FRAMES
 
 terminate_test_instance() {
   if [[ -n "$webots_pid" ]] && kill -0 "$webots_pid" 2>/dev/null; then
@@ -148,6 +151,9 @@ required_files=(
   depth_initial.png
   depth_initial.f32
   depth_initial.json
+  outage_schedule.json
+  outage_events.jsonl
+  display_frames.csv
 )
 for required_file in "${required_files[@]}"; do
   if [[ ! -s "$run_dir/$required_file" ]]; then
@@ -172,7 +178,10 @@ if ! python3 - \
   "$run_dir/depth_initial.png" \
   "$run_dir/depth_initial.f32" \
   "$run_dir/depth_initial.json" \
-  "$run_dir/telemetry.csv" <<'PY'
+  "$run_dir/telemetry.csv" \
+  "$run_dir/outage_schedule.json" \
+  "$run_dir/outage_events.jsonl" \
+  "$run_dir/display_frames.csv" <<'PY'
 import csv
 import hashlib
 import json
@@ -181,7 +190,7 @@ from pathlib import Path
 import struct
 import sys
 
-marker_path, config_path, run_manifest_path, rgb_path, depth_png_path, depth_raw_path, depth_metadata_path, telemetry_path = map(
+marker_path, config_path, run_manifest_path, rgb_path, depth_png_path, depth_raw_path, depth_metadata_path, telemetry_path, outage_schedule_path, outage_events_path, display_frames_path = map(
     Path, sys.argv[1:]
 )
 
@@ -190,11 +199,18 @@ with marker_path.open(encoding="utf-8") as marker_file:
 with config_path.open(encoding="utf-8") as config_file:
     controller_config = json.load(config_file)
     flight_profile = controller_config["flight_profile"]
+with (config_path.parent.parent / controller_config["apparatus_manifest"]).open(
+    encoding="utf-8"
+) as apparatus_file:
+    selected_apparatus = json.load(apparatus_file)
 with run_manifest_path.open(encoding="utf-8") as manifest_file:
     run_manifest = json.load(manifest_file)
 
 apparatus = run_manifest.get("apparatus", {})
-if apparatus.get("id") != "dream_fpv_webots" or apparatus.get("version") != "1.0.0":
+if (
+    apparatus.get("id") != selected_apparatus.get("apparatus_id")
+    or apparatus.get("version") != selected_apparatus.get("version")
+):
     raise SystemExit(f"Unexpected apparatus identity: {apparatus}")
 if marker.get("apparatus_id") != apparatus["id"] or marker.get("apparatus_version") != apparatus["version"]:
     raise SystemExit("Smoke marker and run manifest apparatus identity disagree")
@@ -218,6 +234,10 @@ if locked_config_sha256 != controller_config_sha256:
     raise SystemExit("Explicit and frozen controller config SHA-256 values disagree")
 if marker.get("controller_config_sha256") != controller_config_sha256:
     raise SystemExit("Smoke marker and run manifest controller config SHA-256 disagree")
+if marker.get("pilot_display_width") != 480 or marker.get("pilot_display_height") != 270:
+    raise SystemExit("Smoke marker has unexpected pilot display dimensions")
+if marker.get("outage_mode") != "off":
+    raise SystemExit("Normal smoke run unexpectedly enabled outage injection")
 runtime = run_manifest.get("runtime", {})
 if runtime.get("webots_actual_version") != runtime.get("webots_tested_version"):
     raise SystemExit(f"Unexpected Webots runtime version: {runtime}")
@@ -288,6 +308,14 @@ required_telemetry_fields = {
     "collision",
     "recovery_count",
     "input_source_code",
+    "outage_active",
+    "outage_condition_code",
+    "outage_event_ordinal",
+    "outage_seed",
+    "outage_requested_duration_ms",
+    "outage_effective_duration_ms",
+    "outage_elapsed_ms",
+    "outage_anchor_age_ms",
 }
 with telemetry_path.open(newline="", encoding="utf-8") as telemetry_file:
     reader = csv.DictReader(telemetry_file)
@@ -337,6 +365,33 @@ for first, second in zip(times, times[1:]):
     gap = second - first
     if gap <= 0.0 or gap > 0.041:
         raise SystemExit(f"Telemetry timestamp gap is {gap * 1000:.1f} ms")
+
+with outage_schedule_path.open(encoding="utf-8") as schedule_file:
+    outage_schedule = json.load(schedule_file)
+if outage_schedule.get("mode") != "off" or outage_schedule.get("events") != []:
+    raise SystemExit("Normal smoke run has a non-empty outage schedule")
+if outage_schedule.get("schedule_sha256") != marker.get("outage_schedule_sha256"):
+    raise SystemExit("Smoke marker and outage schedule digests disagree")
+events = [
+    json.loads(line)
+    for line in outage_events_path.read_text(encoding="utf-8").splitlines()
+]
+if [event.get("type") for event in events] != ["run_start", "run_end"]:
+    raise SystemExit("Normal smoke run has unexpected outage events")
+if events[-1].get("outcome") != "completed":
+    raise SystemExit("Normal smoke run did not record completed outcome")
+if any(events[-1].get(name) != 0 for name in (
+    "scheduled_event_count",
+    "started_event_count",
+    "ended_event_count",
+    "aborted_event_count",
+    "pending_event_count",
+)):
+    raise SystemExit("Normal smoke run has unexpected outage event counts")
+with display_frames_path.open(newline="", encoding="utf-8") as frame_file:
+    display_rows = list(csv.DictReader(frame_file))
+if display_rows:
+    raise SystemExit("Normal smoke run unexpectedly logged display frames")
 
 if marker["drone_z_m"] <= 0.25:
     raise SystemExit(
