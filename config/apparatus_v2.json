@@ -59,7 +59,8 @@
         "motion_blur_ms": 0.0,
         "noise": 0.0,
         "display_overlay": false,
-        "model_scope": "clean low-latency simulator video path; not a calibrated digital air-unit, codec, RF, receiver, or display model"
+        "live_view_source": "mounted Webots Viewpoint with the physical screen transparent; the pilot camera supplies outage anchors and physical-display transitions",
+        "model_scope": "clean simulator viewport path; not a calibrated digital air-unit, codec, RF, receiver, or display model"
       },
       "analog": {
         "device_name": "pilot analog camera",
@@ -79,6 +80,7 @@
           "sync_band_rows": [90, 180],
           "sync_band_height_px": 2
         },
+        "live_view_source": "physical camera-backed display",
         "model_scope": "visual analog-style degradation only; not a calibrated RF, transmitter, receiver, or composite-video signal model"
       }
     }
@@ -116,7 +118,7 @@
     "config/course_zones.json": "7f2cb474bf63bea887715bd76294d73fd6ed101b46e82b1289a93e46eb8abea5",
     "config/apex_t19_calibration_v1.json": "065f0d5a55a42a3da875332a835a3238b7876df0aa6480a6470d87498be6630c",
     "config/outage_baselines_v1.json": "a8c421f17a7f2a4fe3c393c32e769a8720d4c902e04143bdbea97b2bab28bc3f",
-    "controllers/dream_mode_controller/dream_mode_controller.py": "ad42e074d4f45745fcc10cc9fe52d8b4b8f2df8fc8fd2385b9f9fb8c49fd0866",
+    "controllers/dream_mode_controller/dream_mode_controller.py": "b4a05b29369f358729b39482d93ef0a7aaafeccde6838c437941891e8663bc66",
     "controllers/dream_mode_controller/input_mapping.py": "cf4d6cbf519f7ae5e1068997875072c27325c8f9305c71c77ec0f239c37f1fbf",
     "controllers/dream_mode_controller/apparatus.py": "0eb99b406b7d1961f9f7b831b31306542c1a2fc059d32f0a899b9ce1fc6c6892",
     "controllers/dream_mode_controller/outage_baselines.py": "6dddb7bb19eb002141522d7dda2d7ae4280a24cba29c86dd782283976c3edbf4",

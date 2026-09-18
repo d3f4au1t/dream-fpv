@@ -227,6 +227,19 @@ class DreamModeController(Supervisor):
                 "Pilot display dimensions must match the selected pilot camera"
             )
         self.pilot_display_node = self.getFromDevice(self.pilot_display._tag)
+        if self.pilot_display_node is None:
+            raise RuntimeError("Could not resolve the physical pilot display")
+        display_children = self.pilot_display_node.getField("children")
+        display_shape = (
+            None
+            if display_children is None or display_children.getCount() == 0
+            else display_children.getMFNode(0)
+        )
+        self.pilot_display_appearance_node = (
+            None
+            if display_shape is None
+            else display_shape.getField("appearance").getSFNode()
+        )
         camera_node = self.getFromDevice(self.camera._tag)
         pilot_digital_camera_node = self.getFromDevice(
             self.pilot_digital_camera._tag
@@ -237,6 +250,7 @@ class DreamModeController(Supervisor):
         depth_node = self.getFromDevice(self.depth._tag)
         if (
             self.pilot_display_node is None
+            or self.pilot_display_appearance_node is None
             or camera_node is None
             or pilot_digital_camera_node is None
             or pilot_analog_camera_node is None
@@ -374,6 +388,8 @@ class DreamModeController(Supervisor):
             self.home_viewpoint_field_of_view = (
                 self.viewpoint_node.getField("fieldOfView").getSFFloat()
             )
+        if self.pilot_video_style == "digital":
+            self._set_digital_direct_view(True)
         self.recovery_enabled = os.environ.get("DREAM_MODE_DISABLE_RECOVERY") != "1"
         self.recovery_count = 0
         self.inverted_since = None
@@ -765,6 +781,11 @@ class DreamModeController(Supervisor):
                 "pilot_display": {
                     "device": "pilot display",
                     "video_style": self.pilot_video_style,
+                    "live_view_source": (
+                        "mounted viewpoint"
+                        if self.pilot_video_style == "digital"
+                        else "physical display"
+                    ),
                     "source_camera": self.pilot_camera_name,
                     "width": self.pilot_display.getWidth(),
                     "height": self.pilot_display.getHeight(),
@@ -1738,11 +1759,27 @@ class DreamModeController(Supervisor):
         self.pilot_display.setAlpha(0.045)
         self.pilot_display.fillRectangle(0, (2 * height) // 3, width, 2)
 
+    def _set_digital_direct_view(self, enabled: bool) -> None:
+        """Use the mounted 3D Viewpoint for clean digital live video."""
+        if self.pilot_video_style != "digital":
+            return
+        if self.viewpoint_node is None:
+            raise RuntimeError("Digital pilot view requires the mounted Viewpoint")
+        self.pilot_display_appearance_node.getField("transparency").setSFFloat(
+            1.0 if enabled else 0.0
+        )
+        clip_far = float(
+            self.apparatus["pilot_display"]["viewpoint_clip_range_m"][1]
+        )
+        self.viewpoint_node.getField("far").setSFFloat(0.0 if enabled else clip_far)
+
     def _restore_live_pilot_display(self) -> None:
         self._clear_pilot_display_layer()
         self.pilot_display.attachCamera(self.pilot_camera)
         if self.pilot_video_style == "analog":
             self._draw_analog_overlay()
+        else:
+            self._set_digital_direct_view(True)
         if self.outage_display_image is not None:
             self.pilot_display.imageDelete(self.outage_display_image)
             self.outage_display_image = None
@@ -1817,6 +1854,8 @@ class DreamModeController(Supervisor):
             raise RuntimeError(
                 f"Could not capture pilot display anchor for outage {event['id']}"
             )
+        if self.pilot_video_style == "digital":
+            self._set_digital_direct_view(False)
         validation_capture_processing_ms = 0.0
         if self.display_readback_validation_enabled:
             validation_started = time.monotonic()
