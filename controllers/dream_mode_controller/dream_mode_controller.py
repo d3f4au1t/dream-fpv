@@ -233,6 +233,7 @@ class DreamModeController(Supervisor):
             self.pilot_display.getHeight(),
         )
         self.pilot_display.attachCamera(self.pilot_camera)
+        self._draw_analog_overlay()
         self.pilot_frame_selector = PilotFrameSelector(
             self.pilot_camera.getWidth() * self.pilot_camera.getHeight() * 4
         )
@@ -1686,9 +1687,28 @@ class DreamModeController(Supervisor):
             self.pilot_display.getHeight(),
         )
 
+    def _draw_analog_overlay(self) -> None:
+        """Add low-opacity line structure without altering research RGB."""
+        width = self.pilot_display.getWidth()
+        height = self.pilot_display.getHeight()
+        self.pilot_display.setOpacity(1.0)
+        self.pilot_display.setColor(0x081018)
+        self.pilot_display.setAlpha(0.09)
+        for y in range(2, height, 3):
+            self.pilot_display.drawLine(0, y, width - 1, y)
+        # Two faint, differently tinted sync bands break up the perfectly
+        # uniform digital raster while remaining unobtrusive during flight.
+        self.pilot_display.setColor(0x27445C)
+        self.pilot_display.setAlpha(0.055)
+        self.pilot_display.fillRectangle(0, height // 3, width, 2)
+        self.pilot_display.setColor(0x5A3046)
+        self.pilot_display.setAlpha(0.045)
+        self.pilot_display.fillRectangle(0, (2 * height) // 3, width, 2)
+
     def _restore_live_pilot_display(self) -> None:
         self._clear_pilot_display_layer()
         self.pilot_display.attachCamera(self.pilot_camera)
+        self._draw_analog_overlay()
         if self.outage_display_image is not None:
             self.pilot_display.imageDelete(self.outage_display_image)
             self.outage_display_image = None

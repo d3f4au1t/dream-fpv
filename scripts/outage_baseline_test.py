@@ -530,12 +530,12 @@ def validate_artifacts(run_dir: Path, expected_script: list[dict]) -> dict:
             f"{event_id} anchor dimensions are wrong",
         )
         require(
-            anchor_rgb == pilot_source_anchor_rgb,
-            f"{event_id} physical Display anchor differs from the pilot source",
-        )
-        require(
             pilot_source_anchor_rgb != recorded_anchor_rgb,
             f"{event_id} pilot source is not visually degraded",
+        )
+        require(
+            anchor_rgb != recorded_anchor_rgb,
+            f"{event_id} physical Display anchor is not visually degraded",
         )
         require((mid_width, mid_height) == RGB_SIZE, f"{event_id} mid dimensions are wrong")
         require((last_width, last_height) == RGB_SIZE, f"{event_id} last dimensions are wrong")
