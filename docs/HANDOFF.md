@@ -1,6 +1,6 @@
 # Dream FPV project handoff
 
-Last updated: 2026-09-17
+Last updated: 2026-09-18
 
 This document is the starting point for a new Codex chat. Read it before
 changing or running the project. It records the research objective, the user's
@@ -44,8 +44,7 @@ The original two-year plan is summarized as:
 - later phases: pilot study, formal human study, offline physical-flight
   validation and thesis.
 
-Do not start Phase 3 unless the user asks. The current task was to complete
-Phase 2.
+Phase 2 is complete. Do not start Phase 3 unless the user asks.
 
 ## 2. User environment and preferences
 
@@ -84,13 +83,16 @@ Never discard unrelated user changes. Avoid destructive Git commands.
 - Phase 1 tag: `apparatus-v1.0.0`
 - Phase 1 validation record: `validation/apparatus-v1.0.0.json`
 - Phase 2 source commit: `02237d1cda893bd5bd408e6b174a146e9a2a4277`
-- The Phase 2 source commit has been pushed to `origin/main`.
+- Phase 2 validation-record commit:
+  `c3192f1da1e9d15f9458a6e2333845ed26a68c39`
+- Phase 2 tag: `apparatus-v2.0.0` (annotated and pushed)
+- Phase 2 validation record: `validation/apparatus-v2.0.0.json`
 - Phase 2 apparatus manifest digest:
   `31485b919cbb9391b83bd3182bf20c8bba5f39a0f85bafd5b9c302ae56db334a`
 - Phase 2 controller-configuration digest:
   `3697b431b1683c903b06ce4358c55fb9a0faf1fcca47f90cc72f7ea273f67342`
 
-At the time this handoff was written, one normal interactive Webots process was
+At the time this handoff was updated, one normal interactive Webots process was
 left open with the deterministic Phase 2 schedule and the project file had all
 rendering-device overlay panes hidden. Process IDs are transient; recheck with:
 
@@ -98,13 +100,10 @@ rendering-device overlay panes hidden. Process IDs are transient; recheck with:
 pgrep -fal '^/Applications/Webots.app/Contents/MacOS/webots'
 ```
 
-The Phase 2 source is complete, but release bookkeeping is intentionally still
-listed as pending so the next chat does not invent evidence:
-
-- `validation/apparatus-v2.0.0.json` has not yet been committed;
-- annotated tag `apparatus-v2.0.0` has not yet been created or pushed;
-- the final 72-scenario Phase 2 dynamics rerun was stopped after 33 successful
-  scenarios when the user requested that Webots stop opening and closing.
+The Phase 2 source and release bookkeeping are complete. The validation record
+uses the complete Phase 1 72-scenario dynamics result as inherited evidence and
+records the interrupted Phase 2 rerun as a 33-scenario spot check. The
+`apparatus-v2.0.0` tag points to the validation-record commit.
 
 The Phase 1 validation record already contains a complete passing 72-scenario
 dynamics suite. Phase 2 declares `flight_model_changed: false` and
@@ -326,23 +325,20 @@ The following checks were completed against the Phase 2 locked files:
 
 Do not quote the interrupted Phase 2 flight run as 72/72.
 
-## 9. Remaining Phase 2 release work
+## 9. Phase 2 release completion
 
-1. Decide how to record the inherited flight-dynamics evidence. The honest
-   choices are:
-   - record the complete Phase 1 72-scenario result plus the Phase 2 33-scenario
-     spot check, explaining that the Phase 2 rerun was stopped at the user's
-     request; or
-   - design a true one-window regression runner before rerunning all 72.
-2. Create `validation/apparatus-v2.0.0.json` with the actual evidence above and
-   `validated_source.git_commit` set to the Phase 2 source commit.
-3. Commit and push the validation record.
-4. Create and push an annotated `apparatus-v2.0.0` tag pointing to the
-   validation-record commit.
-5. Leave the existing Webots window open unless the user asks to close it.
+- `validation/apparatus-v2.0.0.json` records the actual Phase 2 evidence and
+  identifies `02237d1cda893bd5bd408e6b174a146e9a2a4277` as the validated source.
+- Commit `c3192f1da1e9d15f9458a6e2333845ed26a68c39` contains the validation record
+  and is pushed to `origin/main`.
+- Annotated tag `apparatus-v2.0.0` points to that commit and is pushed to
+  `origin`.
+- The existing Webots window was left open.
 
-Do not mark a check as passed if it was not completed. Do not restart the
-multi-window dynamics runner merely to make the summary look complete.
+The incomplete Phase 2 dynamics rerun remains intentionally qualified. Do not
+quote it as 72/72 or restart the multi-window runner merely to make the summary
+look complete. A future full Phase 2 rerun should first use a true one-window
+regression runner or proceed with the user's explicit direction.
 
 ## 10. Known limits and research boundaries
 
@@ -386,5 +382,5 @@ uncertainty-aware boundary between useful continuation and unsafe confidence.
 2. Fetch GitHub and confirm local `main` has not diverged.
 3. Check `git status` and preserve any user changes.
 4. Check whether Webots is already open; do not create another window.
-5. Ask only if a real decision is required. Otherwise continue the pending
-   validation-record/tag work directly and push each completed edit.
+5. Do not repeat the completed Phase 2 release work. Wait for the user to ask
+   for Phase 3 or another concrete next step.
