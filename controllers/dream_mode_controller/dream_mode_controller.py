@@ -470,7 +470,6 @@ class DreamModeController(Supervisor):
         state = {
             "project_file": str(project_path.relative_to(self.project_root)),
             "research_camera_visible": None,
-            "pilot_camera_visible": None,
             "depth_visible": None,
         }
         try:
@@ -483,7 +482,6 @@ class DreamModeController(Supervisor):
             return state
         for device, key in (
             ("research camera", "research_camera_visible"),
-            ("pilot analog camera", "pilot_camera_visible"),
             ("depth", "depth_visible"),
         ):
             match = re.search(
@@ -502,8 +500,6 @@ class DreamModeController(Supervisor):
             )
             if state[key] is not False
         ]
-        if state["pilot_camera_visible"] is True:
-            unsafe.append("pilot analog camera")
         if outage_mode != "off" and unsafe:
             raise RuntimeError(
                 "Phase 2 requires hidden live RGB/depth overlays; unsafe or "

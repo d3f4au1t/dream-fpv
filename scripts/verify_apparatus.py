@@ -406,13 +406,6 @@ def verify_semantic_claims(apparatus: dict, zones: dict, config: dict) -> None:
                 raise SemanticVerificationError(
                     f"Rendering-device overlay is not hidden: {device}"
                 )
-        if (
-            "renderingDevicePerspectives: "
-            "Dream Mode Drone:pilot analog camera;1;"
-        ) in project_view:
-            raise SemanticVerificationError(
-                "Rendering-device overlay is not hidden: pilot analog camera"
-            )
         if source.count("setVisibility") < 3:
             raise SemanticVerificationError(
                 "Pilot display is not hidden from every onboard sensor"

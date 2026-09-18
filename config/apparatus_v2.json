@@ -92,7 +92,7 @@
     "config/course_zones.json": "7f2cb474bf63bea887715bd76294d73fd6ed101b46e82b1289a93e46eb8abea5",
     "config/apex_t19_calibration_v1.json": "065f0d5a55a42a3da875332a835a3238b7876df0aa6480a6470d87498be6630c",
     "config/outage_baselines_v1.json": "a8c421f17a7f2a4fe3c393c32e769a8720d4c902e04143bdbea97b2bab28bc3f",
-    "controllers/dream_mode_controller/dream_mode_controller.py": "78d8e339becbabe428018327f6721bc6d853008a61d21df7f1b891a05feaa9ca",
+    "controllers/dream_mode_controller/dream_mode_controller.py": "768204eb5a4c00fb2cc39fe42619beb890eed9f2036feeb409ac73e185c376b7",
     "controllers/dream_mode_controller/input_mapping.py": "cf4d6cbf519f7ae5e1068997875072c27325c8f9305c71c77ec0f239c37f1fbf",
     "controllers/dream_mode_controller/apparatus.py": "0eb99b406b7d1961f9f7b831b31306542c1a2fc059d32f0a899b9ce1fc6c6892",
     "controllers/dream_mode_controller/outage_baselines.py": "6dddb7bb19eb002141522d7dda2d7ae4280a24cba29c86dd782283976c3edbf4",
