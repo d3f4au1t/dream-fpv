@@ -1,0 +1,126 @@
+{
+  "schema_version": 1,
+  "validation_status": "passed",
+  "recorded_at_utc": "2026-09-18T12:03:43Z",
+  "repository": "https://github.com/d3f4au1t/dream-fpv",
+  "evidence_basis": "Phase 2-specific acceptance, the inherited complete Phase 1 flight-dynamics result, and an incomplete Phase 2 flight-dynamics spot check.",
+  "apparatus": {
+    "id": "dream_fpv_webots",
+    "version": "2.0.0",
+    "manifest_sha256": "31485b919cbb9391b83bd3182bf20c8bba5f39a0f85bafd5b9c302ae56db334a",
+    "controller_config_sha256": "3697b431b1683c903b06ce4358c55fb9a0faf1fcca47f90cc72f7ea273f67342"
+  },
+  "validated_source": {
+    "git_commit": "02237d1cda893bd5bd408e6b174a146e9a2a4277",
+    "git_dirty": false,
+    "note": "This is the Phase 2 source commit. Later commits before this record changed documentation only; the 13 locked apparatus files remained identical. The validation-record commit adds only evidence and does not change the apparatus."
+  },
+  "environment": {
+    "webots_tested_version": "R2025a",
+    "webots_actual_version": "R2025a",
+    "python_version": "3.12.4",
+    "platform": "macOS 26.3 (25D125)"
+  },
+  "checks": {
+    "apparatus_verifier": {
+      "passed": true,
+      "command": "./scripts/verify_apparatus.py",
+      "locked_file_count": 13,
+      "course_zone_count": 10,
+      "manifest_sha256": "31485b919cbb9391b83bd3182bf20c8bba5f39a0f85bafd5b9c302ae56db334a"
+    },
+    "unit_tests": {
+      "passed": true,
+      "command": "python3 -m unittest discover -s tests -v",
+      "test_count": 94,
+      "failure_count": 0
+    },
+    "startup_smoke": {
+      "passed": true,
+      "command": "./scripts/smoke_test.sh",
+      "telemetry_data_rows": 161
+    },
+    "outage_baseline_acceptance": {
+      "passed": true,
+      "command": "./scripts/outage_baseline_test.py",
+      "replay_count": 2,
+      "events_per_replay": 10,
+      "conditions": [
+        "black",
+        "frozen"
+      ],
+      "requested_durations_ms": [
+        100,
+        250,
+        500,
+        750,
+        1000
+      ],
+      "aborted_event_count": 0,
+      "pending_event_count": 0,
+      "max_onset_processing_ms": 2.517,
+      "display_period_ms": 16,
+      "verified_properties": [
+        "canonical and repeatable schedules",
+        "exact half-open display-frame intervals",
+        "black and immutable frozen pilot output",
+        "changing hidden ground truth",
+        "synchronized RGB and depth artifacts",
+        "telemetry transitions",
+        "return to live video"
+      ]
+    },
+    "rendered_display_acceptance": {
+      "passed": true,
+      "command": "DREAM_MODE_RENDER_VIEWPOINT_TEST=1 ./scripts/outage_baseline_test.py",
+      "replay_count": 2,
+      "events_per_replay": 10,
+      "max_onset_processing_ms": 2.944,
+      "display_period_ms": 16,
+      "physical_display_readback_verified": true,
+      "main_viewpoint_images_inspected": true,
+      "observed_result": "Black covered the pilot view, frozen held the onset scene, and both conditions returned to live video."
+    },
+    "flight_dynamics": {
+      "flight_model_changed_from_phase_1": false,
+      "course_changed_from_phase_1": false,
+      "inherited_complete_acceptance": {
+        "passed": true,
+        "source_record": "validation/apparatus-v1.0.0.json",
+        "source_record_sha256": "d0562ef6e54b1381e4f54ee4daa9af9157e28eb480c150baf7a76c10de885768",
+        "scenario_count": 72,
+        "completed_scenario_count": 72,
+        "failed_check_count": 0,
+        "report_sha256": "b7fad642ea91b1a160aa122c81fd571d4f110a8b032576ae3d02a547592132b5"
+      },
+      "phase_2_spot_check": {
+        "suite_complete": false,
+        "command": "./scripts/flight_dynamics_test.py",
+        "planned_scenario_count": 72,
+        "confirmed_successful_scenario_count": 33,
+        "observed_failure_count": 0,
+        "report_generated": false,
+        "stop_reason": "The user requested that the repeated Webots window lifecycle stop.",
+        "qualification": "This interrupted run is evidence for 33 successful Phase 2 scenarios only. It is not a 72/72 Phase 2 result."
+      }
+    }
+  },
+  "release_qualification": {
+    "phase_2_outage_baseline_complete": true,
+    "phase_2_flight_dynamics_rerun_complete": false,
+    "flight_dynamics_release_basis": "The flight model and course are unchanged from the fully validated Phase 1 apparatus; the partial Phase 2 rerun found no failures in 33 completed scenarios.",
+    "one_window_regression_runner_available": false
+  },
+  "scope_boundary": {
+    "software_apparatus_phase_2_complete": true,
+    "predictive_display_implemented": false,
+    "uncertainty_model_implemented": false,
+    "physical_digital_twin_validated": false,
+    "formal_participant_trials_ready": false,
+    "pending_before_participant_trials": [
+      "Record and validate the participant controller identity, report format, endpoints, channel mapping, polarity, and deadzone.",
+      "Validate the simulator dynamics against measured physical-airframe data.",
+      "Fix the experimental protocol, training procedure, power analysis, and human-subject approval."
+    ]
+  }
+}
