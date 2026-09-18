@@ -17,4 +17,5 @@ if [[ "$video_style" != "digital" && "$video_style" != "analog" ]]; then
 fi
 
 export DREAM_MODE_VIDEO_STYLE="$video_style"
+/usr/bin/defaults write com.cyberbotics.Webots-R2025a View3d.hideAllCameraOverlays -bool true
 PYTHONDONTWRITEBYTECODE=1 exec "$webots_bin" "$world_path"

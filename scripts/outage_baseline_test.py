@@ -48,6 +48,21 @@ class WebotsStartupError(RuntimeError):
     """A retryable failure before the controller starts its run."""
 
 
+def sanitized_launch_environment() -> dict[str, str]:
+    """Keep the requested video style while clearing unrelated run controls."""
+    environment = os.environ.copy()
+    video_style = environment.get("DREAM_MODE_VIDEO_STYLE", "digital").lower()
+    if video_style not in {"digital", "analog"}:
+        raise BaselineValidationError(
+            "DREAM_MODE_VIDEO_STYLE must be 'digital' or 'analog'"
+        )
+    for name in tuple(environment):
+        if name.startswith("DREAM_MODE_"):
+            environment.pop(name)
+    environment["DREAM_MODE_VIDEO_STYLE"] = video_style
+    return environment
+
+
 def effective_duration(requested_ms: int) -> int:
     return math.ceil(requested_ms / DISPLAY_PERIOD_MS) * DISPLAY_PERIOD_MS
 
@@ -112,10 +127,7 @@ def launch_once(run_dir: Path, script: list[dict], smoke_steps: int) -> None:
     manifest_path = run_dir / "run_manifest.json"
     port = available_port()
     render_viewpoint = os.environ.get("DREAM_MODE_RENDER_VIEWPOINT_TEST") == "1"
-    environment = os.environ.copy()
-    for name in tuple(environment):
-        if name.startswith("DREAM_MODE_"):
-            environment.pop(name)
+    environment = sanitized_launch_environment()
     environment.update(
         {
             "DREAM_MODE_OUTAGE_MODE": "scripted",

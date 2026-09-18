@@ -36,4 +36,5 @@ else
   export DREAM_MODE_OUTAGE_CONDITION="$outage_condition"
 fi
 
+/usr/bin/defaults write com.cyberbotics.Webots-R2025a View3d.hideAllCameraOverlays -bool true
 PYTHONDONTWRITEBYTECODE=1 exec "$webots_bin" "$world_path"
