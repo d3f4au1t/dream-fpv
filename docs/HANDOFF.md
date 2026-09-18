@@ -82,13 +82,17 @@ Never discard unrelated user changes. Avoid destructive Git commands.
 - Branch: `main`
 - Phase 1 tag: `apparatus-v1.0.0`
 - Phase 1 validation record: `validation/apparatus-v1.0.0.json`
-- Phase 2 source commit: `02237d1cda893bd5bd408e6b174a146e9a2a4277`
+- Phase 2 baseline source commit: `02237d1cda893bd5bd408e6b174a146e9a2a4277`
+- Phase 2.0.1 single-session validation source commit:
+  `ee2eac8e967784e686bb403d29d363a337b1cc2f`
 - Phase 2 validation-record commit:
-  `c3192f1da1e9d15f9458a6e2333845ed26a68c39`
-- Phase 2 tag: `apparatus-v2.0.0` (annotated and pushed)
-- Phase 2 validation record: `validation/apparatus-v2.0.0.json`
+  `c2a0710b1cf70e4a45ada1248520ad15c52c2ac2`
+- Current Phase 2 tag: `apparatus-v2.0.1` (annotated and pushed)
+- Current Phase 2 validation record: `validation/apparatus-v2.0.1.json`
+- Historical qualified Phase 2 tag and record: `apparatus-v2.0.0` and
+  `validation/apparatus-v2.0.0.json`
 - Phase 2 apparatus manifest digest:
-  `31485b919cbb9391b83bd3182bf20c8bba5f39a0f85bafd5b9c302ae56db334a`
+  `0a77987fdf76657ea85953ac15765622627e3fdfed3d2f10c29e004222c37193`
 - Phase 2 controller-configuration digest:
   `3697b431b1683c903b06ce4358c55fb9a0faf1fcca47f90cc72f7ea273f67342`
 
@@ -100,16 +104,12 @@ rendering-device overlay panes hidden. Process IDs are transient; recheck with:
 pgrep -fal '^/Applications/Webots.app/Contents/MacOS/webots'
 ```
 
-The Phase 2 source and release bookkeeping are complete. The validation record
-uses the complete Phase 1 72-scenario dynamics result as inherited evidence and
-records the interrupted Phase 2 rerun as a 33-scenario spot check. The
-`apparatus-v2.0.0` tag points to the validation-record commit.
-
-The Phase 1 validation record already contains a complete passing 72-scenario
-dynamics suite. Phase 2 declares `flight_model_changed: false` and
-`course_changed: false`; the Phase 2 spot check completed 33 scenarios without
-a failure before it was stopped. A new chat must report this honestly rather
-than claiming that all 72 scenarios were rerun on Phase 2.
+The Phase 2 source and release bookkeeping are complete. Patch version 2.0.1
+adds a validation-only queue that runs all 72 dynamics scenarios in one hidden
+Webots process, reloading the world between isolated scenarios instead of
+opening and closing 72 application instances. The complete Phase 2.0.1 rerun
+passed 72/72 with zero failed checks. The `apparatus-v2.0.1` tag points to the
+validation-record commit.
 
 ## 4. Frozen Phase 1 apparatus
 
@@ -246,6 +246,8 @@ Read these before modifying Phase 2:
   rendering-device panes should remain `;0;`;
 - `scripts/run_phase2.sh` — interactive Phase 2 launcher;
 - `scripts/outage_baseline_test.py` — two-replay end-to-end acceptance test;
+- `scripts/flight_dynamics_test.py` — complete 72-scenario, single-session
+  flight regression suite;
 - `scripts/verify_apparatus.py` — static manifest and semantic verifier;
 - `tests/test_outage_baselines.py` and `tests/test_outage_artifacts.py` — Phase 2
   unit coverage.
@@ -299,46 +301,43 @@ Simulator checks, only when compatible with the user's one-window request:
 ./scripts/flight_dynamics_test.py
 ```
 
-`flight_dynamics_test.py` launches and closes a Webots instance for each of 72
-scenarios. Do not run it again without first explaining that behavior and
-getting the user's direction, because the user specifically objected to the
-repeated window lifecycle.
+`flight_dynamics_test.py` now launches one hidden Webots process and reloads the
+world between all 72 scenarios. It does not repeatedly open and close Webots.
+The former behavior exists only behind `--legacy-multi-session` and should not
+be used without the user's explicit direction.
 
 ## 8. Verified results
 
 The following checks were completed against the Phase 2 locked files:
 
 - static verifier: passed; 13 locked files and 10 course zones;
-- unit tests: 94 passed, zero failures;
+- unit tests: 96 passed, zero failures;
 - startup smoke: passed with 161 telemetry rows;
 - outage acceptance: two isolated replays, ten events per replay, every required
   duration in black and frozen conditions, no aborts, exact frame intervals,
   valid artifacts, and return to live video;
-- best final non-rendered onset work: 2.517 ms, below the 16 ms display period;
+- final Phase 2.0.1 non-rendered onset work: 2.539 ms, below the 16 ms display
+  period;
 - rendered acceptance: two replays of ten events, physical display readback and
   main-Viewpoint images inspected; black covered the pilot view and frozen held
   the onset scene; onset work was 2.944 ms in that rendered run;
-- inherited Phase 1 flight dynamics: 72/72 passed in
-  `validation/apparatus-v1.0.0.json`;
-- Phase 2 flight spot check: 33/72 completed without failure before the user
-  requested that the repeated Webots launches stop.
-
-Do not quote the interrupted Phase 2 flight run as 72/72.
+- Phase 2.0.1 flight dynamics: 72/72 passed with zero failed checks in one
+  Webots session; the two determinism replay fingerprints matched.
 
 ## 9. Phase 2 release completion
 
-- `validation/apparatus-v2.0.0.json` records the actual Phase 2 evidence and
-  identifies `02237d1cda893bd5bd408e6b174a146e9a2a4277` as the validated source.
-- Commit `c3192f1da1e9d15f9458a6e2333845ed26a68c39` contains the validation record
+- `validation/apparatus-v2.0.1.json` records direct static, unit, startup,
+  outage-baseline and complete 72-scenario dynamics evidence.
+- Commit `ee2eac8e967784e686bb403d29d363a337b1cc2f` is the clean validated source.
+- Commit `c2a0710b1cf70e4a45ada1248520ad15c52c2ac2` contains the validation record
   and is pushed to `origin/main`.
-- Annotated tag `apparatus-v2.0.0` points to that commit and is pushed to
+- Annotated tag `apparatus-v2.0.1` points to that commit and is pushed to
   `origin`.
 - The existing Webots window was left open.
 
-The incomplete Phase 2 dynamics rerun remains intentionally qualified. Do not
-quote it as 72/72 or restart the multi-window runner merely to make the summary
-look complete. A future full Phase 2 rerun should first use a true one-window
-regression runner or proceed with the user's explicit direction.
+The older `apparatus-v2.0.0` record remains as an honest historical record of
+the previously interrupted 33-scenario spot check. It is superseded by the
+complete direct evidence in `apparatus-v2.0.1`.
 
 ## 10. Known limits and research boundaries
 
