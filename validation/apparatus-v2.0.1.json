@@ -1,0 +1,121 @@
+{
+  "schema_version": 1,
+  "validation_status": "passed",
+  "recorded_at_utc": "2026-09-18T13:01:51Z",
+  "repository": "https://github.com/d3f4au1t/dream-fpv",
+  "evidence_basis": "Direct Phase 2.0.1 static, unit, startup, outage-baseline, and complete single-session flight-dynamics acceptance.",
+  "apparatus": {
+    "id": "dream_fpv_webots",
+    "version": "2.0.1",
+    "manifest_sha256": "0a77987fdf76657ea85953ac15765622627e3fdfed3d2f10c29e004222c37193",
+    "controller_config_sha256": "3697b431b1683c903b06ce4358c55fb9a0faf1fcca47f90cc72f7ea273f67342",
+    "controller_source_sha256": "9d0a1e9d86b4b20294929cad5f46047c89d28b2dda757e3a3f9abea34a11aed6"
+  },
+  "validated_source": {
+    "git_commit": "ee2eac8e967784e686bb403d29d363a337b1cc2f",
+    "git_dirty": false,
+    "note": "This commit adds the single-Webots-session validation path and freezes apparatus patch version 2.0.1. The validation-record commit adds only evidence and does not change the apparatus."
+  },
+  "environment": {
+    "webots_tested_version": "R2025a",
+    "webots_actual_version": "R2025a",
+    "python_version": "3.12.4",
+    "platform": "macOS 26.3 (25D125)"
+  },
+  "checks": {
+    "apparatus_verifier": {
+      "passed": true,
+      "command": "./scripts/verify_apparatus.py",
+      "locked_file_count": 13,
+      "course_zone_count": 10,
+      "manifest_sha256": "0a77987fdf76657ea85953ac15765622627e3fdfed3d2f10c29e004222c37193"
+    },
+    "unit_tests": {
+      "passed": true,
+      "command": "./.venv/bin/python -m unittest discover -s tests -v",
+      "test_count": 96,
+      "failure_count": 0
+    },
+    "startup_smoke": {
+      "passed": true,
+      "command": "./scripts/smoke_test.sh",
+      "telemetry_data_rows": 161
+    },
+    "outage_baseline_acceptance": {
+      "passed": true,
+      "command": "./scripts/outage_baseline_test.py",
+      "replay_count": 2,
+      "events_per_replay": 10,
+      "conditions": [
+        "black",
+        "frozen"
+      ],
+      "requested_durations_ms": [
+        100,
+        250,
+        500,
+        750,
+        1000
+      ],
+      "aborted_event_count": 0,
+      "pending_event_count": 0,
+      "max_onset_processing_ms": 2.539,
+      "display_period_ms": 16,
+      "verified_properties": [
+        "repeatable schedules and transition timing",
+        "exact half-open display-frame intervals",
+        "black and immutable frozen pilot output",
+        "changing hidden ground truth",
+        "synchronized RGB and depth artifacts",
+        "telemetry transitions",
+        "return to live video"
+      ]
+    },
+    "rendered_display_acceptance": {
+      "passed": true,
+      "evidence_type": "inherited_from_2.0.0",
+      "source_record": "validation/apparatus-v2.0.0.json",
+      "source_record_sha256": "ba631ffa503fa1fa8997293c2690907eeece369a9579e2fd2c3c40d860252fba",
+      "replay_count": 2,
+      "events_per_replay": 10,
+      "physical_display_readback_verified": true,
+      "main_viewpoint_images_inspected": true,
+      "inheritance_basis": "Version 2.0.1 changes only the validation queue and validation-run lifecycle; the world, display geometry, outage scheduler, frame selector, and artifact writer are unchanged."
+    },
+    "flight_dynamics_acceptance": {
+      "passed": true,
+      "command": "./scripts/flight_dynamics_test.py",
+      "execution_mode": "single_webots_session",
+      "webots_session_count": 1,
+      "world_reload_count": 71,
+      "generated_at_utc": "2026-09-18T12:59:50.037691+00:00",
+      "scenario_count": 72,
+      "completed_scenario_count": 72,
+      "failed_check_count": 0,
+      "run_manifest_count": 72,
+      "run_fingerprint_count": 72,
+      "unique_run_fingerprint_count": 70,
+      "determinism_replay_fingerprint_sha256": "d1fbdcda9690eff748d04e374bf3f6b4d06609b6b86adef200bb8a900fa04127",
+      "report_sha256": "601b7fb4692b78ffd2e7bbf8aa4d7dc7e1854bd2d7f8b04ef00c97360056ea2c"
+    }
+  },
+  "release_qualification": {
+    "phase_2_outage_baseline_complete": true,
+    "phase_2_flight_dynamics_rerun_complete": true,
+    "single_window_regression_runner_available": true,
+    "flight_model_changed_from_phase_1": false,
+    "course_changed_from_phase_1": false
+  },
+  "scope_boundary": {
+    "software_apparatus_phase_2_complete": true,
+    "predictive_display_implemented": false,
+    "uncertainty_model_implemented": false,
+    "physical_digital_twin_validated": false,
+    "formal_participant_trials_ready": false,
+    "pending_before_participant_trials": [
+      "Record and validate the participant controller identity, report format, endpoints, channel mapping, polarity, and deadzone.",
+      "Validate the simulator dynamics against measured physical-airframe data.",
+      "Fix the experimental protocol, training procedure, power analysis, and human-subject approval."
+    ]
+  }
+}
