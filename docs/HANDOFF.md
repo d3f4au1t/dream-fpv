@@ -85,34 +85,33 @@ Never discard unrelated user changes. Avoid destructive Git commands.
 - Phase 2 baseline source commit: `02237d1cda893bd5bd408e6b174a146e9a2a4277`
 - Phase 2.0.1 single-session validation source commit:
   `ee2eac8e967784e686bb403d29d363a337b1cc2f`
-- Phase 2.1.0 analog-view source commit:
-  `d68fc06a05f2c89d12baef1bd3909aafd3381517`
-- Phase 2.1.0 validation-record commit:
-  `2c36853cadd882e33ef50c5ecc2fb78cb61dd9d1`
-- Current Phase 2 tag: `apparatus-v2.1.0` (annotated and pushed)
-- Current Phase 2 validation record: `validation/apparatus-v2.1.0.json`
+- Phase 2.2.0 validated source commit:
+  `7ccce8d274fa9866c71b0bb1830336e70a97ad00`
+- Current Phase 2 tag: `apparatus-v2.2.0` (annotated and pushed)
+- Current Phase 2 validation record: `validation/apparatus-v2.2.0.json`
 - Historical qualified Phase 2 tags and records: `apparatus-v2.0.0` /
   `validation/apparatus-v2.0.0.json` and `apparatus-v2.0.1` /
   `validation/apparatus-v2.0.1.json`
 - Phase 2 apparatus manifest digest:
-  `f9cb3eb407d4c91ce07b281954f9e513b27fa38aeaa763537de222593c1acf4c`
+  `17924033ed85b1e1ffccb34dd0789edb2ce0e615f3c1d2f13559975ec5229aa7`
 - Phase 2 controller-configuration digest:
-  `3697b431b1683c903b06ce4358c55fb9a0faf1fcca47f90cc72f7ea273f67342`
+  `0d689e09986e5b328d081f515b9a400932cd2084ac21d1baf0331d30ddbf9424`
 
 At the time this handoff was updated, one normal interactive Webots process was
-left open with the deterministic Phase 2 schedule and the project file had all
-rendering-device overlay panes hidden. Process IDs are transient; recheck with:
+left open in the default digital mode with the outage emulator off. Camera
+diagnostic panes were hidden so the mounted viewport is the only pilot image.
+Process IDs are transient; recheck with:
 
 ```bash
 pgrep -fal '^/Applications/Webots.app/Contents/MacOS/webots'
 ```
 
-The Phase 2 source and release bookkeeping are complete. Version 2.1.0 adds a
-separate analog-style pilot camera, preserves the clean research RGB path, and
-overscans the physical 16:9 display so no raw 3D viewport band is exposed. The
-complete Phase 2.1.0 rerun passed 72/72 with zero failed checks, and the outage
-acceptance passed all 20 events with physical display readback. The
-`apparatus-v2.1.0` tag points to the validation-record commit.
+The Phase 2 source and release bookkeeping are complete. Version 2.2.0 makes a
+clean, full-frame version of the original mounted Webots viewport the default
+digital pilot view. Analog remains selectable and retains its separate camera,
+signal-style treatment, and overscanned physical display. Both modes passed
+startup and two-replay outage acceptance, and the complete regression passed
+72/72 scenarios with zero failed checks.
 
 ## 4. Frozen Phase 1 apparatus
 
@@ -163,18 +162,18 @@ Phase 2 implements a reproducible link-loss experiment without prediction.
 
 ### Pilot display path
 
-The clean research camera and a dedicated analog-style pilot camera share the
-same 480 × 270 geometry. Only the pilot camera is attached to the Webots
-`Display`; it adds noise, 24 ms motion persistence, highlight bloom, mild
-barrel distortion, scanlines and faint sync bands while the research camera
-remains pristine hidden ground truth. A textured physical screen immediately
-in front of the mounted FPV `Viewpoint` keeps a 16:9 shape but overscans every
-viewport edge, preventing the live 3D scene from leaking through above it.
+Digital is the default. Its uninterrupted view is the original mounted Webots
+`Viewpoint`, filling the entire scene without a low-resolution camera texture
+or duplicate overlay pane. During an outage the controller temporarily exposes
+the physical display, then returns to the direct viewpoint on recovery.
 
-The project file keeps the depth, both camera and duplicate pilot-display
-overlay panes hidden. The physical display is hidden from the clean RGB,
-pilot-camera and depth sensors with `setVisibility`, preventing feedback while
-preserving hidden ground truth.
+Analog remains selectable. It continuously routes the dedicated 480 × 270
+analog-style camera through the overscanned 16:9 physical display and adds
+noise, 24 ms motion persistence, highlight bloom, mild barrel distortion,
+scanlines and faint sync bands. The clean research camera remains pristine
+hidden ground truth in both modes. The physical display is hidden from the
+research, pilot-camera and depth sensors with `setVisibility`, preventing
+feedback while preserving ground truth.
 
 ### Conditions
 
@@ -248,8 +247,9 @@ Read these before modifying Phase 2:
   artifact encoding;
 - `worlds/dream_mode_research.wbt` — course, research camera, depth sensor and
   physical pilot display;
-- `worlds/.dream_mode_research.wbproj` — overlay visibility; all three
-  rendering-device panes should remain `;0;`;
+- `worlds/.dream_mode_research.wbproj` — rendering-device perspective state;
+  camera diagnostic panes are suppressed by the launchers through Webots'
+  `View3d.hideAllCameraOverlays` preference;
 - `scripts/run_phase2.sh` — interactive Phase 2 launcher;
 - `scripts/outage_baseline_test.py` — two-replay end-to-end acceptance test;
 - `scripts/flight_dynamics_test.py` — complete 72-scenario, single-session
@@ -281,6 +281,7 @@ Normal simulator, outage emulator off:
 
 ```bash
 ./scripts/run_webots.sh
+./scripts/run_webots.sh analog
 ```
 
 Phase 2 interactive modes:
@@ -290,6 +291,7 @@ Phase 2 interactive modes:
 ./scripts/run_phase2.sh randomized
 ./scripts/run_phase2.sh deterministic black
 ./scripts/run_phase2.sh randomized frozen
+./scripts/run_phase2.sh deterministic configured analog
 ```
 
 Non-GUI validation:
@@ -304,6 +306,7 @@ Simulator checks, only when compatible with the user's one-window request:
 ```bash
 ./scripts/smoke_test.sh
 ./scripts/outage_baseline_test.py
+DREAM_MODE_VIDEO_STYLE=analog ./scripts/outage_baseline_test.py
 ./scripts/flight_dynamics_test.py
 ```
 
@@ -314,38 +317,35 @@ be used without the user's explicit direction.
 
 ## 8. Verified results
 
-The following checks were completed against the Phase 2.1.0 locked files:
+The following checks were completed against the Phase 2.2.0 locked files:
 
 - static verifier: passed; 13 locked files and 10 course zones;
-- unit tests: 96 passed, zero failures;
-- startup smoke: passed with 161 telemetry rows;
-- outage acceptance: two isolated replays, ten events per replay, every required
-  duration in black and frozen conditions, no aborts, exact frame intervals,
-  valid artifacts, and return to live video;
-- final Phase 2.1.0 onset work: 3.152 ms, below the 16 ms display period;
-- live visual acceptance: the analog-style feed filled the complete mounted
-  viewport with no uncovered bright scene band; camera, depth and display
-  diagnostic overlays remained hidden;
-- physical display acceptance: two replays of ten events verified black and
-  frozen output after the analog pilot source and display-layer treatment;
-- Phase 2.1.0 flight dynamics: 72/72 passed with zero failed checks in one
+- unit tests: 99 passed, zero failures;
+- digital and analog startup smoke: both passed with 161 telemetry rows;
+- digital and analog outage acceptance: each mode passed two isolated replays,
+  ten events per replay, every required duration in black and frozen
+  conditions, no aborts, exact frame intervals, valid artifacts, and return to
+  live video;
+- maximum onset work was 3.981 ms in digital and 3.836 ms in analog, both below
+  the 16 ms display period;
+- live visual acceptance: digital matched the clean original mounted viewport,
+  filled the entire scene, and showed no duplicate diagnostic pane;
+- analog retained the viewport-coverage and style acceptance recorded for
+  Version 2.1.0;
+- Phase 2.2.0 flight dynamics: 72/72 passed with zero failed checks in one
   Webots session; the two determinism replay fingerprints matched.
 
-## 9. Phase 2.1.0 release completion
+## 9. Phase 2.2.0 release completion
 
-- `validation/apparatus-v2.1.0.json` records direct static, unit, startup,
-  physical-display outage, live visual and complete 72-scenario dynamics
-  evidence.
-- Commit `d68fc06a05f2c89d12baef1bd3909aafd3381517` is the clean validated source.
-- Commit `2c36853cadd882e33ef50c5ecc2fb78cb61dd9d1` contains the validation record
-  and is pushed to `origin/main`.
-- Annotated tag `apparatus-v2.1.0` points to that commit and is pushed to
-  `origin`.
-- The existing Webots window was left open.
+- `validation/apparatus-v2.2.0.json` records direct static, unit, dual-mode
+  startup/outage, live digital visual and complete 72-scenario evidence.
+- Commit `7ccce8d274fa9866c71b0bb1830336e70a97ad00` is the clean validated source.
+- Annotated tag `apparatus-v2.2.0` points to the commit containing this record
+  and is pushed to `origin`.
+- The existing Webots window was left open in default digital mode.
 
-The older `apparatus-v2.0.0` and `apparatus-v2.0.1` records remain as historical
-records. They are superseded by the direct analog-view and viewport-coverage
-evidence in `apparatus-v2.1.0`.
+The older Phase 2 records remain as historical evidence. Version 2.2.0
+supersedes them for the selectable digital-default and analog pilot paths.
 
 ## 10. Known limits and research boundaries
 
@@ -355,6 +355,8 @@ evidence in `apparatus-v2.1.0`.
   decoder concealment, compression damage or hardware display latency.
 - The analog-style feed is visual rather than physically calibrated; it must
   not be presented as a measured model of a camera/VTX/receiver/goggle chain.
+- The digital feed is the clean simulator viewport path, not a calibrated model
+  of a digital air unit, codec, RF link or headset.
 - Spatial-zone entry labels trigger locations but does not prove a correct gate
   crossing direction.
 - Direct HID support is decoder- and calibration-specific. Unknown controllers

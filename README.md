@@ -2,7 +2,7 @@
 
 Dream FPV is a Webots-based FPV research simulator for controlled video-loss experiments. It includes an acro quad model, a technical practice course, a camera-backed pilot view, synchronized RGB/depth capture, external-controller input, recovery logic, and timestamped telemetry.
 
-The frozen Phase 1 flight baseline is tagged `apparatus-v1.0.0`. Phase 2 keeps that flight model and course unchanged and adds reproducible black-screen and frozen-frame outage baselines. The current Phase 2 apparatus version is `2.1.0`. See the [Phase 1 apparatus record](docs/APPARATUS_V1.md), [Phase 2 apparatus record](docs/APPARATUS_V2.md), [project handoff](docs/HANDOFF.md), and the corresponding validation summaries under [`validation/`](validation/).
+The frozen Phase 1 flight baseline is tagged `apparatus-v1.0.0`. Phase 2 keeps that flight model and course unchanged and adds reproducible black-screen and frozen-frame outage baselines. The current Phase 2 apparatus version is `2.2.0`. See the [Phase 1 apparatus record](docs/APPARATUS_V1.md), [Phase 2 apparatus record](docs/APPARATUS_V2.md), [project handoff](docs/HANDOFF.md), and the corresponding validation summaries under [`validation/`](validation/).
 
 This is an experimental software apparatus, not a validated digital twin of a physical aircraft.
 
@@ -43,7 +43,13 @@ Start the simulator:
 
 You can also open `worlds/dream_mode_research.wbt` from Webots.
 
-The main view is mounted to the aircraft and uses a dedicated 480 × 270 pilot camera with the same 120° horizontal field of view and 22° uptilt as the clean research camera. Noise, motion persistence, highlight bloom, mild lens distortion, scanlines, and sync bands give the pilot path an analog-video character without contaminating hidden RGB-D ground truth. The physical display is oversized beyond the visible viewport while retaining a 16:9 surface, so the pilot feed fills the view without exposing the brighter 3D scene around it. This is a visual treatment, not a calibrated model of a physical VTX or RF link.
+Digital is the default pilot mode. Its live view is the original mounted Webots viewport: full-frame, clean, and free of an inset camera pane. During an outage it switches to the physical display so black and frozen-frame conditions remain measurable. Analog mode uses a separate 480 × 270 pilot camera with noise, motion persistence, highlight bloom, mild lens distortion, scanlines, and sync bands. Both pilot paths retain the same 120° horizontal field of view and 22° uptilt, and neither contaminates hidden RGB-D ground truth. The analog treatment is visual, not a calibrated model of a physical VTX or RF link.
+
+Select the optional analog view explicitly:
+
+```bash
+./scripts/run_webots.sh analog
+```
 
 Flight control runs at 125 Hz. The RGB and depth sensors save one synchronized startup pair, then disable themselves to reduce rendering load. Set `DREAM_MODE_CONTINUOUS_SENSORS=1` before launch when a run needs continuous sampling.
 
@@ -107,7 +113,7 @@ Visible course structures have matching collision geometry. Spatial zone IDs lab
 
 ## Phase 2 video-outage baselines
 
-Phase 2 routes the pilot view through a 480 × 270 camera-backed display and interrupts that display while flight physics and control input continue normally. The hidden research RGB/depth sensors also continue sampling so the interrupted view can be compared with ground truth after the run.
+Phase 2 interrupts the selected pilot view while flight physics and control input continue normally. Digital live operation uses the original mounted viewport and reveals the physical display only for the interruption; analog operation continuously uses the 480 × 270 camera-backed display. The hidden research RGB/depth sensors continue sampling so the interrupted view can be compared with ground truth after the run.
 
 Two baseline conditions are implemented:
 
@@ -142,6 +148,9 @@ Use the Phase 2 launcher to run an outage schedule:
 # Keep the schedule and force every event to one condition
 ./scripts/run_phase2.sh deterministic black
 ./scripts/run_phase2.sh randomized frozen
+
+# Optional third argument selects the analog pilot treatment
+./scripts/run_phase2.sh deterministic configured analog
 ```
 
 The deterministic schedule places one condition-duration pair in each named course section. The randomized schedule makes a repeatable seeded selection from those sections. Events are triggered on zone entry and aligned to a synchronized 64 ms RGB/depth anchor, so an event only occurs if the aircraft reaches its trigger zone. The materialized schedule and its SHA-256 digest are saved with the run.
@@ -192,6 +201,7 @@ Run the end-to-end Phase 2 outage acceptance test:
 
 ```bash
 ./scripts/outage_baseline_test.py
+DREAM_MODE_VIDEO_STYLE=analog ./scripts/outage_baseline_test.py
 ```
 
 This runs two isolated replays of all ten condition-duration pairs and checks schedule reproducibility, exact display-frame intervals, pilot-display output, hidden ground truth, telemetry, artifacts, and return to live video.
@@ -222,7 +232,7 @@ worlds/dream_mode_research.wbt  course and simulator world
 ## Known limitations
 
 - The physical coefficients have not been identified from measured airframe data.
-- Phase 2 supports controlled black and frozen frames, not continuous encoded-video capture, packet loss, RF propagation, decoder behavior, or latency/jitter emulation.
+- Phase 2 supports controlled black and frozen frames, not continuous encoded-video capture, packet loss, RF propagation, decoder behavior, or latency/jitter emulation. Digital mode is the clean simulator viewport path, not a calibrated digital-air-unit model; analog mode is an uncalibrated visual treatment.
 - Predictive display rendering and uncertainty cues are not implemented.
 - The direct-HID adapter requires a validated identity, decoder, and calibration profile for each controller model; arbitrary devices are not mapped automatically.
 - The launcher and end-to-end validation scripts are macOS-specific.

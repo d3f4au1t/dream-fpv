@@ -1,0 +1,153 @@
+{
+  "schema_version": 1,
+  "validation_status": "passed",
+  "recorded_at_utc": "2026-09-18T16:16:41Z",
+  "repository": "https://github.com/d3f4au1t/dream-fpv",
+  "evidence_basis": "Direct Phase 2.2.0 static, unit, dual-mode startup, dual-mode physical-display outage, live digital visual, and complete single-session flight-dynamics acceptance.",
+  "apparatus": {
+    "id": "dream_fpv_webots",
+    "version": "2.2.0",
+    "manifest_sha256": "17924033ed85b1e1ffccb34dd0789edb2ce0e615f3c1d2f13559975ec5229aa7",
+    "controller_config_sha256": "0d689e09986e5b328d081f515b9a400932cd2084ac21d1baf0331d30ddbf9424",
+    "controller_source_sha256": "b4a05b29369f358729b39482d93ef0a7aaafeccde6838c437941891e8663bc66",
+    "world_sha256": "64c8077db3b15bd816ef7142f37a93934d1b014948b67644a9c7287179ab60ae"
+  },
+  "validated_source": {
+    "git_commit": "7ccce8d274fa9866c71b0bb1830336e70a97ad00",
+    "git_dirty": false,
+    "note": "This commit contains the digital-default direct-viewport path, selectable analog path, clean launcher behavior, and corrected dual-mode acceptance runner. The validation-record commit adds only documentation and evidence."
+  },
+  "environment": {
+    "webots_tested_version": "R2025a",
+    "webots_actual_version": "R2025a",
+    "python_version": "3.12.4",
+    "platform": "macOS 26.3 (25D125)"
+  },
+  "checks": {
+    "apparatus_verifier": {
+      "passed": true,
+      "command": "./scripts/verify_apparatus.py",
+      "locked_file_count": 13,
+      "course_zone_count": 10,
+      "manifest_sha256": "17924033ed85b1e1ffccb34dd0789edb2ce0e615f3c1d2f13559975ec5229aa7"
+    },
+    "unit_tests": {
+      "passed": true,
+      "command": "python3 -m unittest discover -s tests -v",
+      "test_count": 99,
+      "failure_count": 0
+    },
+    "startup_smoke": {
+      "passed": true,
+      "commands": [
+        "./scripts/smoke_test.sh",
+        "DREAM_MODE_VIDEO_STYLE=analog ./scripts/smoke_test.sh"
+      ],
+      "video_styles": [
+        "digital",
+        "analog"
+      ],
+      "telemetry_data_rows_per_run": 161
+    },
+    "outage_baseline_acceptance": {
+      "passed": true,
+      "commands": [
+        "./scripts/outage_baseline_test.py",
+        "DREAM_MODE_VIDEO_STYLE=analog ./scripts/outage_baseline_test.py"
+      ],
+      "video_styles": {
+        "digital": {
+          "replay_count": 2,
+          "events_per_replay": 10,
+          "max_onset_processing_ms": 3.981,
+          "live_view_source": "mounted viewpoint",
+          "normal_live_frame_matches_pilot_source": true
+        },
+        "analog": {
+          "replay_count": 2,
+          "events_per_replay": 10,
+          "max_onset_processing_ms": 3.836,
+          "live_view_source": "physical display",
+          "pilot_source_distinct_from_clean_research_rgb": true
+        }
+      },
+      "conditions": [
+        "black",
+        "frozen"
+      ],
+      "requested_durations_ms": [
+        100,
+        250,
+        500,
+        750,
+        1000
+      ],
+      "aborted_event_count": 0,
+      "pending_event_count": 0,
+      "display_period_ms": 16,
+      "physical_display_readback_verified": true,
+      "verified_properties": [
+        "repeatable schedules and transition timing",
+        "exact half-open display-frame intervals",
+        "black and immutable frozen pilot output",
+        "style-specific live-source identity",
+        "changing hidden ground truth",
+        "synchronized RGB and depth artifacts",
+        "telemetry transitions",
+        "return to the selected live video path"
+      ]
+    },
+    "live_visual_acceptance": {
+      "passed": true,
+      "existing_webots_window_reloaded": true,
+      "default_video_style": "digital",
+      "digital_matches_original_mounted_viewport": true,
+      "pilot_view_fills_viewport": true,
+      "uncovered_raw_scene_band_absent": true,
+      "duplicate_camera_overlay_absent": true,
+      "analog_acceptance_inherited_from": "validation/apparatus-v2.1.0.json",
+      "analog_acceptance_source_sha256": "d8458abc6b4dfbc1c0a35833abe3e7b43cd324af3366199c1127674dd730b842"
+    },
+    "flight_dynamics_acceptance": {
+      "passed": true,
+      "command": "./scripts/flight_dynamics_test.py",
+      "execution_mode": "single_webots_session",
+      "webots_session_count": 1,
+      "world_reload_count": 71,
+      "generated_at_utc": "2026-09-18T16:15:28.068009+00:00",
+      "scenario_count": 72,
+      "completed_scenario_count": 72,
+      "failed_check_count": 0,
+      "run_manifest_count": 72,
+      "run_fingerprint_count": 72,
+      "unique_run_fingerprint_count": 70,
+      "determinism_replay_fingerprint_sha256": "2480a08113c299bee6d35c4ebae2b788922060b8604773490497bbed49d86be2",
+      "report_sha256": "5522d269822d2744bc243ad943ff21a66c57ed67ead678eb316ce380d307c2b5"
+    }
+  },
+  "release_qualification": {
+    "phase_2_outage_baseline_complete": true,
+    "phase_2_flight_dynamics_rerun_complete": true,
+    "digital_default_original_viewport_complete": true,
+    "analog_option_complete": true,
+    "viewport_coverage_regression_fixed": true,
+    "single_window_regression_runner_available": true,
+    "flight_model_changed_from_phase_1": false,
+    "course_changed_from_phase_1": false
+  },
+  "scope_boundary": {
+    "software_apparatus_phase_2_complete": true,
+    "digital_air_unit_physically_calibrated": false,
+    "analog_style_physically_calibrated": false,
+    "predictive_display_implemented": false,
+    "uncertainty_model_implemented": false,
+    "physical_digital_twin_validated": false,
+    "formal_participant_trials_ready": false,
+    "pending_before_participant_trials": [
+      "Record and validate the participant controller identity, report format, endpoints, channel mapping, polarity, and deadzone.",
+      "Calibrate any claimed digital or analog FPV-link characteristics against measured physical hardware before making fidelity claims.",
+      "Validate the simulator dynamics against measured physical-airframe data.",
+      "Fix the experimental protocol, training procedure, power analysis, and human-subject approval."
+    ]
+  }
+}

@@ -1,4 +1,4 @@
-# Dream FPV Experimental Apparatus v2.1.0
+# Dream FPV Experimental Apparatus v2.2.0
 
 Status: **frozen** on 2026-09-18.
 
@@ -28,17 +28,22 @@ Git tag. A digest must not be updated only to silence a failed integrity check.
 
 ## Pilot-view path
 
-The clean research camera and dedicated pilot camera both render at 480 × 270
-with a 16 ms sampling period, 120° horizontal field of view, and 22° uptilt.
-Only the pilot camera is attached to the Webots `Display`. It applies
-analog-style sensor noise, 24 ms motion persistence, highlight bloom, mild
-barrel distortion, scanlines, and two faint horizontal sync bands. The clean
-research camera remains a separate hidden ground-truth path.
+The apparatus provides `digital` and `analog` pilot styles. `digital` is the
+default. Its uninterrupted view is the original mounted Webots `Viewpoint`, so
+normal flight retains the clean full-frame simulator viewport rather than a
+camera texture or inset device overlay. At outage onset the controller makes
+the physical display opaque; at recovery it restores the direct viewpoint.
 
-The textured physical screen keeps a 16:9 shape but extends beyond every edge
-of the mounted pilot viewport. This deliberate overscan crops the screen rather
-than allowing the brighter live 3D scene to show above it. Outage commands
-affect that display, not the aircraft dynamics.
+The analog style continuously routes a dedicated 480 × 270 pilot camera through
+the Webots `Display`. It applies sensor noise, 24 ms motion persistence,
+highlight bloom, mild barrel distortion, scanlines, and two faint horizontal
+sync bands. The textured screen keeps a 16:9 shape but extends beyond every
+viewport edge, preventing the brighter live 3D scene from appearing around it.
+
+The clean research camera and both pilot cameras use a 16 ms sampling period,
+120° horizontal field of view, and 22° uptilt. The research RGB and depth paths
+remain separate hidden ground truth. Outage commands affect only the pilot
+presentation, not the aircraft dynamics.
 
 During an outage:
 
@@ -131,13 +136,14 @@ Normal simulator launches leave the outage emulator disabled:
 ```
 
 The Phase 2 launcher accepts a schedule mode followed by an optional condition
-override:
+override and optional pilot-video style:
 
 ```bash
 ./scripts/run_phase2.sh deterministic
 ./scripts/run_phase2.sh randomized
 ./scripts/run_phase2.sh deterministic black
 ./scripts/run_phase2.sh deterministic frozen
+./scripts/run_phase2.sh deterministic configured analog
 ```
 
 The same experiment can be configured directly with
@@ -220,8 +226,8 @@ python3 -m unittest discover -s tests -v
 ```
 
 The signed-off result is stored in
-`validation/apparatus-v2.1.0.json` and the validated source is tagged
-`apparatus-v2.1.0`.
+`validation/apparatus-v2.2.0.json` and the validated source is tagged
+`apparatus-v2.2.0`.
 
 The flight-dynamics runner uses one hidden Webots process for the complete
 72-scenario suite. It reloads the frozen world between isolated scenarios,
@@ -238,6 +244,8 @@ multi-process behavior remains available only for diagnosis with
 - The analog-style pilot feed is a visual treatment. Its noise, persistence,
   bloom, distortion and line artifacts have not been calibrated against a
   physical camera, VTX, receiver or goggle display.
+- The digital pilot feed is the clean simulator viewport path. It has not been
+  calibrated as a model of a digital air unit, codec, RF link or headset.
 - Phase 2 contains no predicted imagery, optical-flow extrapolation, learned
   model, uncertainty estimate, or safety cue.
 - The physical coefficients remain simulator-tuned rather than identified from
@@ -260,5 +268,5 @@ multi-process behavior remains available only for diagnosis with
   scenarios pass.
 - Two end-to-end outage replays pass every duration in both conditions with
   exact timing, valid artifacts, and no aborted or pending events.
-- The validation summary and `apparatus-v2.1.0` Git tag identify the frozen
+- The validation summary and `apparatus-v2.2.0` Git tag identify the frozen
   source used for the apparatus.
