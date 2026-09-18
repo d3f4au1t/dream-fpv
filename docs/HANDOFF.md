@@ -85,14 +85,17 @@ Never discard unrelated user changes. Avoid destructive Git commands.
 - Phase 2 baseline source commit: `02237d1cda893bd5bd408e6b174a146e9a2a4277`
 - Phase 2.0.1 single-session validation source commit:
   `ee2eac8e967784e686bb403d29d363a337b1cc2f`
-- Phase 2 validation-record commit:
-  `c2a0710b1cf70e4a45ada1248520ad15c52c2ac2`
-- Current Phase 2 tag: `apparatus-v2.0.1` (annotated and pushed)
-- Current Phase 2 validation record: `validation/apparatus-v2.0.1.json`
-- Historical qualified Phase 2 tag and record: `apparatus-v2.0.0` and
-  `validation/apparatus-v2.0.0.json`
+- Phase 2.1.0 analog-view source commit:
+  `d68fc06a05f2c89d12baef1bd3909aafd3381517`
+- Phase 2.1.0 validation-record commit:
+  `2c36853cadd882e33ef50c5ecc2fb78cb61dd9d1`
+- Current Phase 2 tag: `apparatus-v2.1.0` (annotated and pushed)
+- Current Phase 2 validation record: `validation/apparatus-v2.1.0.json`
+- Historical qualified Phase 2 tags and records: `apparatus-v2.0.0` /
+  `validation/apparatus-v2.0.0.json` and `apparatus-v2.0.1` /
+  `validation/apparatus-v2.0.1.json`
 - Phase 2 apparatus manifest digest:
-  `0a77987fdf76657ea85953ac15765622627e3fdfed3d2f10c29e004222c37193`
+  `f9cb3eb407d4c91ce07b281954f9e513b27fa38aeaa763537de222593c1acf4c`
 - Phase 2 controller-configuration digest:
   `3697b431b1683c903b06ce4358c55fb9a0faf1fcca47f90cc72f7ea273f67342`
 
@@ -104,12 +107,12 @@ rendering-device overlay panes hidden. Process IDs are transient; recheck with:
 pgrep -fal '^/Applications/Webots.app/Contents/MacOS/webots'
 ```
 
-The Phase 2 source and release bookkeeping are complete. Patch version 2.0.1
-adds a validation-only queue that runs all 72 dynamics scenarios in one hidden
-Webots process, reloading the world between isolated scenarios instead of
-opening and closing 72 application instances. The complete Phase 2.0.1 rerun
-passed 72/72 with zero failed checks. The `apparatus-v2.0.1` tag points to the
-validation-record commit.
+The Phase 2 source and release bookkeeping are complete. Version 2.1.0 adds a
+separate analog-style pilot camera, preserves the clean research RGB path, and
+overscans the physical 16:9 display so no raw 3D viewport band is exposed. The
+complete Phase 2.1.0 rerun passed 72/72 with zero failed checks, and the outage
+acceptance passed all 20 events with physical display readback. The
+`apparatus-v2.1.0` tag points to the validation-record commit.
 
 ## 4. Frozen Phase 1 apparatus
 
@@ -311,7 +314,7 @@ be used without the user's explicit direction.
 
 ## 8. Verified results
 
-The following checks were completed against the Phase 2 locked files:
+The following checks were completed against the Phase 2.1.0 locked files:
 
 - static verifier: passed; 13 locked files and 10 course zones;
 - unit tests: 96 passed, zero failures;
@@ -319,28 +322,30 @@ The following checks were completed against the Phase 2 locked files:
 - outage acceptance: two isolated replays, ten events per replay, every required
   duration in black and frozen conditions, no aborts, exact frame intervals,
   valid artifacts, and return to live video;
-- final Phase 2.0.1 non-rendered onset work: 2.539 ms, below the 16 ms display
-  period;
-- rendered acceptance: two replays of ten events, physical display readback and
-  main-Viewpoint images inspected; black covered the pilot view and frozen held
-  the onset scene; onset work was 2.944 ms in that rendered run;
-- Phase 2.0.1 flight dynamics: 72/72 passed with zero failed checks in one
+- final Phase 2.1.0 onset work: 3.152 ms, below the 16 ms display period;
+- live visual acceptance: the analog-style feed filled the complete mounted
+  viewport with no uncovered bright scene band; camera, depth and display
+  diagnostic overlays remained hidden;
+- physical display acceptance: two replays of ten events verified black and
+  frozen output after the analog pilot source and display-layer treatment;
+- Phase 2.1.0 flight dynamics: 72/72 passed with zero failed checks in one
   Webots session; the two determinism replay fingerprints matched.
 
-## 9. Phase 2 release completion
+## 9. Phase 2.1.0 release completion
 
-- `validation/apparatus-v2.0.1.json` records direct static, unit, startup,
-  outage-baseline and complete 72-scenario dynamics evidence.
-- Commit `ee2eac8e967784e686bb403d29d363a337b1cc2f` is the clean validated source.
-- Commit `c2a0710b1cf70e4a45ada1248520ad15c52c2ac2` contains the validation record
+- `validation/apparatus-v2.1.0.json` records direct static, unit, startup,
+  physical-display outage, live visual and complete 72-scenario dynamics
+  evidence.
+- Commit `d68fc06a05f2c89d12baef1bd3909aafd3381517` is the clean validated source.
+- Commit `2c36853cadd882e33ef50c5ecc2fb78cb61dd9d1` contains the validation record
   and is pushed to `origin/main`.
-- Annotated tag `apparatus-v2.0.1` points to that commit and is pushed to
+- Annotated tag `apparatus-v2.1.0` points to that commit and is pushed to
   `origin`.
 - The existing Webots window was left open.
 
-The older `apparatus-v2.0.0` record remains as an honest historical record of
-the previously interrupted 33-scenario spot check. It is superseded by the
-complete direct evidence in `apparatus-v2.0.1`.
+The older `apparatus-v2.0.0` and `apparatus-v2.0.1` records remain as historical
+records. They are superseded by the direct analog-view and viewport-coverage
+evidence in `apparatus-v2.1.0`.
 
 ## 10. Known limits and research boundaries
 
