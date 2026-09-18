@@ -312,7 +312,6 @@ class WorldLayoutTests(unittest.TestCase):
         # duplicate pane over the physical FPV screen.
         for device in (
             "depth",
-            "pilot analog camera",
             "pilot display",
             "research camera",
         ):
@@ -320,6 +319,10 @@ class WorldLayoutTests(unittest.TestCase):
                 self.project,
                 rf"renderingDevicePerspectives: Dream Mode Drone:{re.escape(device)};0;",
             )
+        self.assertNotRegex(
+            self.project,
+            r"renderingDevicePerspectives: Dream Mode Drone:pilot analog camera;1;",
+        )
 
     def test_research_and_pilot_cameras_are_separate(self):
         self.assertEqual(self.world.count("Camera {"), 2)

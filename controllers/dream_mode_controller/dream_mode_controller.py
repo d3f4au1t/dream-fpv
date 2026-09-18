@@ -498,11 +498,12 @@ class DreamModeController(Supervisor):
             label
             for label, key in (
                 ("research camera", "research_camera_visible"),
-                ("pilot analog camera", "pilot_camera_visible"),
                 ("depth", "depth_visible"),
             )
             if state[key] is not False
         ]
+        if state["pilot_camera_visible"] is True:
+            unsafe.append("pilot analog camera")
         if outage_mode != "off" and unsafe:
             raise RuntimeError(
                 "Phase 2 requires hidden live RGB/depth overlays; unsafe or "
