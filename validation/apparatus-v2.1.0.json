@@ -1,0 +1,132 @@
+{
+  "schema_version": 1,
+  "validation_status": "passed",
+  "recorded_at_utc": "2026-09-18T15:49:43Z",
+  "repository": "https://github.com/d3f4au1t/dream-fpv",
+  "evidence_basis": "Direct Phase 2.1.0 static, unit, startup, physical-display outage, live visual, and complete single-session flight-dynamics acceptance.",
+  "apparatus": {
+    "id": "dream_fpv_webots",
+    "version": "2.1.0",
+    "manifest_sha256": "f9cb3eb407d4c91ce07b281954f9e513b27fa38aeaa763537de222593c1acf4c",
+    "controller_config_sha256": "3697b431b1683c903b06ce4358c55fb9a0faf1fcca47f90cc72f7ea273f67342",
+    "controller_source_sha256": "1105ab4216558d36158027e400a8574c30eb31be51d7972240e37a136c86f1a3",
+    "world_sha256": "b59228e45f7b4ee245132494c509da1e76c9b67f9c4456874db0ea37b9538538"
+  },
+  "validated_source": {
+    "git_commit": "d68fc06a05f2c89d12baef1bd3909aafd3381517",
+    "git_dirty": false,
+    "note": "This commit contains the analog-style pilot camera, overscanned 16:9 physical display, hidden clean research path, artifact updates, and documentation. The validation-record commit adds only evidence and release bookkeeping."
+  },
+  "environment": {
+    "webots_tested_version": "R2025a",
+    "webots_actual_version": "R2025a",
+    "python_version": "3.12.4",
+    "platform": "macOS 26.3 (25D125)"
+  },
+  "checks": {
+    "apparatus_verifier": {
+      "passed": true,
+      "command": "./scripts/verify_apparatus.py",
+      "locked_file_count": 13,
+      "course_zone_count": 10,
+      "manifest_sha256": "f9cb3eb407d4c91ce07b281954f9e513b27fa38aeaa763537de222593c1acf4c"
+    },
+    "unit_tests": {
+      "passed": true,
+      "command": "python3 -m unittest discover -s tests -v",
+      "test_count": 96,
+      "failure_count": 0
+    },
+    "startup_smoke": {
+      "passed": true,
+      "command": "./scripts/smoke_test.sh",
+      "telemetry_data_rows": 161
+    },
+    "outage_baseline_acceptance": {
+      "passed": true,
+      "command": "./scripts/outage_baseline_test.py",
+      "replay_count": 2,
+      "events_per_replay": 10,
+      "conditions": [
+        "black",
+        "frozen"
+      ],
+      "requested_durations_ms": [
+        100,
+        250,
+        500,
+        750,
+        1000
+      ],
+      "aborted_event_count": 0,
+      "pending_event_count": 0,
+      "max_onset_processing_ms": 3.152,
+      "display_period_ms": 16,
+      "physical_display_readback_verified": true,
+      "verified_properties": [
+        "repeatable schedules and transition timing",
+        "exact half-open display-frame intervals",
+        "black and immutable frozen physical pilot output",
+        "analog pilot source remains distinct from clean research RGB",
+        "changing hidden ground truth",
+        "synchronized RGB and depth artifacts",
+        "telemetry transitions",
+        "return to live analog-style video"
+      ]
+    },
+    "live_visual_acceptance": {
+      "passed": true,
+      "existing_webots_window_reloaded": true,
+      "pilot_feed_fills_viewport": true,
+      "uncovered_raw_scene_band_absent": true,
+      "analog_style_artifacts_visible": [
+        "color noise",
+        "motion persistence",
+        "highlight bloom",
+        "mild barrel distortion",
+        "horizontal line structure",
+        "faint sync bands"
+      ],
+      "research_and_device_overlays_hidden": true
+    },
+    "flight_dynamics_acceptance": {
+      "passed": true,
+      "command": "./scripts/flight_dynamics_test.py",
+      "execution_mode": "single_webots_session",
+      "webots_session_count": 1,
+      "world_reload_count": 71,
+      "generated_at_utc": "2026-09-18T15:49:19.752773+00:00",
+      "scenario_count": 72,
+      "completed_scenario_count": 72,
+      "failed_check_count": 0,
+      "run_manifest_count": 72,
+      "run_fingerprint_count": 72,
+      "unique_run_fingerprint_count": 70,
+      "determinism_replay_fingerprint_sha256": "5ef3f1e71f84952569d0e6bc98d508b49e49118bdb89de5ea7e185c3d3e0d961",
+      "report_sha256": "e72049d4c30057b0177549b40f14bd44b95baba0987945c3316d6b82d5d1fd8a"
+    }
+  },
+  "release_qualification": {
+    "phase_2_outage_baseline_complete": true,
+    "phase_2_flight_dynamics_rerun_complete": true,
+    "analog_visual_path_complete": true,
+    "viewport_coverage_regression_fixed": true,
+    "single_window_regression_runner_available": true,
+    "flight_model_changed_from_phase_1": false,
+    "course_changed_from_phase_1": false
+  },
+  "scope_boundary": {
+    "software_apparatus_phase_2_complete": true,
+    "analog_style_physically_calibrated": false,
+    "predictive_display_implemented": false,
+    "uncertainty_model_implemented": false,
+    "physical_digital_twin_validated": false,
+    "formal_participant_trials_ready": false,
+    "pending_before_participant_trials": [
+      "Record and validate the participant controller identity, report format, endpoints, channel mapping, polarity, and deadzone.",
+      "Calibrate the analog-style feed against a measured physical camera, VTX, receiver, and goggle chain before making physical-fidelity claims.",
+      "Validate the simulator dynamics against measured physical-airframe data.",
+      "Fix the experimental protocol, training procedure, power analysis, and human-subject approval."
+    ]
+  }
+}
