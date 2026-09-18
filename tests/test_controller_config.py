@@ -21,6 +21,9 @@ class ControllerConfigTests(unittest.TestCase):
             {"roll": 0, "pitch": 1, "throttle": 2, "yaw": 3},
         )
 
+    def test_digital_pilot_video_is_the_default(self):
+        self.assertEqual(self.config["pilot_video_style"], "digital")
+
     def test_frozen_apparatus_files_are_explicit(self):
         self.assertEqual(
             self.config["apparatus_manifest"],

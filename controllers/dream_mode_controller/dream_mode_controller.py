@@ -125,6 +125,18 @@ class DreamModeController(Supervisor):
             self.outage_mode = os.environ.get(
                 "DREAM_MODE_OUTAGE_MODE", "off"
             ).strip().lower()
+            configured_video_style = os.environ.get(
+                "DREAM_MODE_VIDEO_STYLE",
+                self.config.get("pilot_video_style", "digital"),
+            )
+            if not isinstance(configured_video_style, str):
+                raise ValueError("pilot video style must be a string")
+            self.pilot_video_style = configured_video_style.strip().lower()
+            if self.pilot_video_style not in {"digital", "analog"}:
+                raise ValueError(
+                    "pilot video style must be either 'digital' or 'analog'"
+                )
+            self.pilot_camera_name = f"pilot {self.pilot_video_style} camera"
             condition_override = os.environ.get("DREAM_MODE_OUTAGE_CONDITION")
             self.outage_condition_override = (
                 None
@@ -185,9 +197,16 @@ class DreamModeController(Supervisor):
         self.camera = self._enable_device(
             "research camera", self.CAMERA_PERIOD_MS
         )
-        self.pilot_camera = self._enable_device(
-            "pilot analog camera", self.CAMERA_PERIOD_MS
+        self.pilot_digital_camera = self.getDevice("pilot digital camera")
+        self.pilot_analog_camera = self.getDevice("pilot analog camera")
+        if self.pilot_digital_camera is None or self.pilot_analog_camera is None:
+            raise RuntimeError("Required digital and analog pilot cameras are missing")
+        self.pilot_camera = (
+            self.pilot_digital_camera
+            if self.pilot_video_style == "digital"
+            else self.pilot_analog_camera
         )
+        self.pilot_camera.enable(self.CAMERA_PERIOD_MS)
         self.depth = self._enable_device("depth", self.DEPTH_PERIOD_MS)
         self.continuous_research_sensors = (
             os.environ.get("DREAM_MODE_CONTINUOUS_SENSORS") == "1"
@@ -205,16 +224,22 @@ class DreamModeController(Supervisor):
             or self.pilot_display.getHeight() != self.pilot_camera.getHeight()
         ):
             raise RuntimeError(
-                "Pilot display dimensions must match the analog pilot camera"
+                "Pilot display dimensions must match the selected pilot camera"
             )
         self.pilot_display_node = self.getFromDevice(self.pilot_display._tag)
         camera_node = self.getFromDevice(self.camera._tag)
-        pilot_camera_node = self.getFromDevice(self.pilot_camera._tag)
+        pilot_digital_camera_node = self.getFromDevice(
+            self.pilot_digital_camera._tag
+        )
+        pilot_analog_camera_node = self.getFromDevice(
+            self.pilot_analog_camera._tag
+        )
         depth_node = self.getFromDevice(self.depth._tag)
         if (
             self.pilot_display_node is None
             or camera_node is None
-            or pilot_camera_node is None
+            or pilot_digital_camera_node is None
+            or pilot_analog_camera_node is None
             or depth_node is None
         ):
             raise RuntimeError("Could not resolve Phase 2 rendering devices")
@@ -222,7 +247,8 @@ class DreamModeController(Supervisor):
         # Hide that surface from both research sensors to avoid recursively
         # capturing the display instead of the simulated world.
         self.pilot_display_node.setVisibility(camera_node, False)
-        self.pilot_display_node.setVisibility(pilot_camera_node, False)
+        self.pilot_display_node.setVisibility(pilot_digital_camera_node, False)
+        self.pilot_display_node.setVisibility(pilot_analog_camera_node, False)
         self.pilot_display_node.setVisibility(depth_node, False)
         self.pilot_display.setAlpha(0.0)
         self.pilot_display.setOpacity(1.0)
@@ -233,7 +259,8 @@ class DreamModeController(Supervisor):
             self.pilot_display.getHeight(),
         )
         self.pilot_display.attachCamera(self.pilot_camera)
-        self._draw_analog_overlay()
+        if self.pilot_video_style == "analog":
+            self._draw_analog_overlay()
         self.pilot_frame_selector = PilotFrameSelector(
             self.pilot_camera.getWidth() * self.pilot_camera.getHeight() * 4
         )
@@ -419,11 +446,15 @@ class DreamModeController(Supervisor):
 
         print(f"Dream Mode log directory: {self.run_dir}")
         if self.outage_mode == "off":
-            print("Phase 2 outage emulator is off; pilot display is live.")
+            print(
+                "Phase 2 outage emulator is off; "
+                f"{self.pilot_video_style} pilot display is live."
+            )
         else:
             print(
                 "Phase 2 outage emulator active: "
-                f"{self.outage_mode}, {len(self.outage_schedule['events'])} events."
+                f"{self.outage_mode}, {len(self.outage_schedule['events'])} events, "
+                f"{self.pilot_video_style} pilot display."
             )
         print("Waiting for joystick; keyboard fallback is active.")
         if not self.armed:
@@ -471,7 +502,8 @@ class DreamModeController(Supervisor):
         state = {
             "project_file": str(project_path.relative_to(self.project_root)),
             "research_camera_visible": None,
-            "pilot_camera_visible": None,
+            "pilot_digital_camera_visible": None,
+            "pilot_analog_camera_visible": None,
             "depth_visible": None,
         }
         try:
@@ -484,7 +516,8 @@ class DreamModeController(Supervisor):
             return state
         for device, key in (
             ("research camera", "research_camera_visible"),
-            ("pilot analog camera", "pilot_camera_visible"),
+            ("pilot digital camera", "pilot_digital_camera_visible"),
+            ("pilot analog camera", "pilot_analog_camera_visible"),
             ("depth", "depth_visible"),
         ):
             match = re.search(
@@ -499,7 +532,8 @@ class DreamModeController(Supervisor):
             label
             for label, key in (
                 ("research camera", "research_camera_visible"),
-                ("pilot analog camera", "pilot_camera_visible"),
+                ("pilot digital camera", "pilot_digital_camera_visible"),
+                ("pilot analog camera", "pilot_analog_camera_visible"),
                 ("depth", "depth_visible"),
             )
             if state[key] is not False
@@ -717,6 +751,7 @@ class DreamModeController(Supervisor):
                 "telemetry_period_s": self.log_period_seconds,
                 "rgb_period_ms": self.CAMERA_PERIOD_MS,
                 "depth_period_ms": self.DEPTH_PERIOD_MS,
+                "pilot_video_style": self.pilot_video_style,
                 "continuous_research_sensors": self.continuous_research_sensors,
                 "recovery_enabled": self.recovery_enabled,
                 "home_translation_m": self.home_translation,
@@ -735,7 +770,8 @@ class DreamModeController(Supervisor):
                 "schedule_sha256": self.outage_schedule["schedule_sha256"],
                 "pilot_display": {
                     "device": "pilot display",
-                    "source_camera": "pilot analog camera",
+                    "video_style": self.pilot_video_style,
+                    "source_camera": self.pilot_camera_name,
                     "width": self.pilot_display.getWidth(),
                     "height": self.pilot_display.getHeight(),
                     "period_ms": self.CAMERA_PERIOD_MS,
@@ -1711,7 +1747,8 @@ class DreamModeController(Supervisor):
     def _restore_live_pilot_display(self) -> None:
         self._clear_pilot_display_layer()
         self.pilot_display.attachCamera(self.pilot_camera)
-        self._draw_analog_overlay()
+        if self.pilot_video_style == "analog":
+            self._draw_analog_overlay()
         if self.outage_display_image is not None:
             self.pilot_display.imageDelete(self.outage_display_image)
             self.outage_display_image = None

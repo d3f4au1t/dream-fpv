@@ -275,54 +275,68 @@ def verify_semantic_claims(apparatus: dict, zones: dict, config: dict) -> None:
 
         pilot = apparatus.get("pilot_display", {})
         display = device_block(world, "Display", pilot.get("device_name", ""))
-        pilot_source = pilot.get("source_camera", {})
-        pilot_camera = device_block(
-            world,
-            "Camera",
-            pilot_source.get("device_name", ""),
-        )
-        for actual, expected in zip(
-            vector_from(pilot_camera, "translation", 3),
-            pilot_source["translation_m"],
-        ):
-            require_close(actual, expected, "pilot camera translation")
-        for actual, expected in zip(
-            vector_from(pilot_camera, "rotation", 4),
-            pilot_source["rotation_axis_angle"],
-        ):
-            require_close(actual, expected, "pilot camera rotation")
-        for field, claim, label in (
-            ("fieldOfView", "field_of_view_rad", "field of view"),
-            ("width", "resolution", "width"),
-            ("height", "resolution", "height"),
-            ("exposure", "exposure", "exposure"),
-            ("bloomThreshold", "bloom_threshold", "bloom threshold"),
-            ("motionBlur", "motion_blur_ms", "motion blur"),
-            ("noise", "noise", "noise"),
-        ):
-            expected = pilot_source[claim]
-            if claim == "resolution":
-                expected = expected[0 if field == "width" else 1]
-            require_close(
-                number_from(
-                    pilot_camera,
-                    rf"^\s*{field}\s+([-+0-9.eE]+)",
-                    field,
-                ),
-                expected,
-                f"pilot camera {label}",
+        styles = pilot.get("available_video_styles")
+        if styles != ["digital", "analog"]:
+            raise SemanticVerificationError("Pilot video-style options disagree")
+        if pilot.get("default_video_style") != config.get("pilot_video_style"):
+            raise SemanticVerificationError("Default pilot video style disagrees")
+        pilot_sources = pilot.get("source_cameras", {})
+        for style in styles:
+            pilot_source = pilot_sources.get(style, {})
+            pilot_camera = device_block(
+                world,
+                "Camera",
+                pilot_source.get("device_name", ""),
             )
-        expected_anti_aliasing = (
-            "TRUE" if pilot_source["anti_aliasing"] else "FALSE"
-        )
-        if f"antiAliasing {expected_anti_aliasing}" not in pilot_camera:
-            raise SemanticVerificationError("Pilot camera anti-aliasing disagrees")
-        radial = vector_from(pilot_camera, "radialCoefficients", 2)
-        for actual, expected in zip(
-            radial,
-            pilot_source["radial_distortion_coefficients"],
-        ):
-            require_close(actual, expected, "pilot camera radial distortion")
+            for actual, expected in zip(
+                vector_from(pilot_camera, "translation", 3),
+                pilot_source["translation_m"],
+            ):
+                require_close(actual, expected, f"{style} pilot camera translation")
+            for actual, expected in zip(
+                vector_from(pilot_camera, "rotation", 4),
+                pilot_source["rotation_axis_angle"],
+            ):
+                require_close(actual, expected, f"{style} pilot camera rotation")
+            for field, claim, label in (
+                ("fieldOfView", "field_of_view_rad", "field of view"),
+                ("width", "resolution", "width"),
+                ("height", "resolution", "height"),
+                ("exposure", "exposure", "exposure"),
+                ("bloomThreshold", "bloom_threshold", "bloom threshold"),
+                ("motionBlur", "motion_blur_ms", "motion blur"),
+                ("noise", "noise", "noise"),
+            ):
+                expected = pilot_source[claim]
+                if claim == "resolution":
+                    expected = expected[0 if field == "width" else 1]
+                require_close(
+                    number_from(
+                        pilot_camera,
+                        rf"^\s*{field}\s+([-+0-9.eE]+)",
+                        field,
+                    ),
+                    expected,
+                    f"{style} pilot camera {label}",
+                )
+            expected_anti_aliasing = (
+                "TRUE" if pilot_source["anti_aliasing"] else "FALSE"
+            )
+            if f"antiAliasing {expected_anti_aliasing}" not in pilot_camera:
+                raise SemanticVerificationError(
+                    f"{style} pilot camera anti-aliasing disagrees"
+                )
+            if "radial_distortion_coefficients" in pilot_source:
+                radial = vector_from(pilot_camera, "radialCoefficients", 2)
+                for actual, expected in zip(
+                    radial,
+                    pilot_source["radial_distortion_coefficients"],
+                ):
+                    require_close(
+                        actual,
+                        expected,
+                        f"{style} pilot camera radial distortion",
+                    )
         for actual, expected in zip(
             vector_from(display, "translation", 3),
             pilot["translation_m"],
@@ -396,6 +410,7 @@ def verify_semantic_claims(apparatus: dict, zones: dict, config: dict) -> None:
         for device in (
             "depth",
             "pilot analog camera",
+            "pilot digital camera",
             "pilot display",
             "research camera",
         ):
@@ -407,7 +422,7 @@ def verify_semantic_claims(apparatus: dict, zones: dict, config: dict) -> None:
                 raise SemanticVerificationError(
                     f"Rendering-device overlay is not hidden: {device}"
                 )
-        if source.count("setVisibility") < 3:
+        if source.count("setVisibility") < 4:
             raise SemanticVerificationError(
                 "Pilot display is not hidden from every onboard sensor"
             )

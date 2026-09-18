@@ -186,6 +186,7 @@ import csv
 import hashlib
 import json
 import math
+import os
 from pathlib import Path
 import struct
 import sys
@@ -241,6 +242,14 @@ if marker.get("outage_mode") != "off":
 runtime = run_manifest.get("runtime", {})
 if runtime.get("webots_actual_version") != runtime.get("webots_tested_version"):
     raise SystemExit(f"Unexpected Webots runtime version: {runtime}")
+expected_video_style = os.environ.get("DREAM_MODE_VIDEO_STYLE", "digital").lower()
+if runtime.get("pilot_video_style") != expected_video_style:
+    raise SystemExit("Smoke run used the wrong pilot video style")
+pilot_manifest = run_manifest.get("outage_baseline", {}).get("pilot_display", {})
+if pilot_manifest.get("video_style") != expected_video_style:
+    raise SystemExit("Pilot display manifest used the wrong video style")
+if pilot_manifest.get("source_camera") != f"pilot {expected_video_style} camera":
+    raise SystemExit("Pilot display manifest used the wrong source camera")
 
 expected_rgb = (480, 270)
 expected_depth = (320, 180)

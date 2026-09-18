@@ -809,8 +809,24 @@ FpvResearchQuad {
       height 270
       near 0.05
     }
-    # Pilot-only analog-style image path. The research camera above remains
-    # pristine so visual degradation never contaminates hidden ground truth.
+    # The digital pilot path is the clean default. It remains separate from
+    # the research camera so display experiments cannot alter ground truth.
+    Camera {
+      translation 0.065 0 0.02
+      rotation 0 1 0 -0.3839724354387525
+      name "pilot digital camera"
+      fieldOfView 2.0943951
+      width 480
+      height 270
+      near 0.05
+      exposure 1
+      antiAliasing TRUE
+      bloomThreshold -1
+      motionBlur 0
+      noise 0
+    }
+    # Optional analog-style path. The research camera above remains pristine
+    # so visual degradation never contaminates hidden ground truth.
     Camera {
       translation 0.065 0 0.02
       rotation 0 1 0 -0.3839724354387525

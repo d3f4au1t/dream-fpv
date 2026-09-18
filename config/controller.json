@@ -5,6 +5,7 @@
   "axis_range": 32767,
   "deadzone": 0.02,
   "joystick_stale_timeout_seconds": 0.25,
+  "pilot_video_style": "digital",
   "continuous_research_sensors": false,
   "telemetry_segment_bytes": 67108864,
   "telemetry_max_segments": 4,

@@ -282,8 +282,8 @@ class WorldLayoutTests(unittest.TestCase):
         self.assertIn("position -6.935 0 0.05", self.world)
         self.assertIn("near 0.05", self.world)
         self.assertIn("far 0.052", self.world)
-        self.assertEqual(self.world.count("translation 0.065 0 0.02"), 3)
-        self.assertEqual(self.world.count("rotation 0 1 0 -0.3839724354387525"), 4)
+        self.assertEqual(self.world.count("translation 0.065 0 0.02"), 4)
+        self.assertEqual(self.world.count("rotation 0 1 0 -0.3839724354387525"), 5)
 
     def test_pilot_view_is_a_camera_backed_physical_display(self):
         display_match = re.search(
@@ -313,6 +313,7 @@ class WorldLayoutTests(unittest.TestCase):
         for device in (
             "depth",
             "pilot analog camera",
+            "pilot digital camera",
             "pilot display",
             "research camera",
         ):
@@ -320,11 +321,21 @@ class WorldLayoutTests(unittest.TestCase):
                 self.project,
                 rf"renderingDevicePerspectives: Dream Mode Drone:{re.escape(device)};0;",
             )
+
     def test_research_and_pilot_cameras_are_separate(self):
-        self.assertEqual(self.world.count("Camera {"), 2)
+        self.assertEqual(self.world.count("Camera {"), 3)
         self.assertNotIn("Camera {", self.proto)
         self.assertIn('name "research camera"', self.world)
+        self.assertIn('name "pilot digital camera"', self.world)
         self.assertIn('name "pilot analog camera"', self.world)
+        digital = self.world.split('name "pilot digital camera"', 1)[1].split(
+            'name "pilot analog camera"', 1
+        )[0]
+        self.assertIn("exposure 1", digital)
+        self.assertIn("antiAliasing TRUE", digital)
+        self.assertIn("bloomThreshold -1", digital)
+        self.assertIn("motionBlur 0", digital)
+        self.assertIn("noise 0", digital)
         pilot = self.world.split('name "pilot analog camera"', 1)[1].split(
             "Display {", 1
         )[0]

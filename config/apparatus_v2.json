@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "apparatus_id": "dream_fpv_webots",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "status": "frozen",
   "frozen_on": "2026-09-18",
   "random_seed": 1907,
@@ -44,25 +44,43 @@
     "viewpoint_clip_range_m": [0.05, 0.052],
     "research_sensor_visibility": false,
     "display_overlay_may_be_visible": true,
-    "source_camera": {
-      "device_name": "pilot analog camera",
-      "resolution": [480, 270],
-      "field_of_view_rad": 2.0943951,
-      "translation_m": [0.065, 0.0, 0.02],
-      "rotation_axis_angle": [0.0, 1.0, 0.0, -0.3839724354387525],
-      "exposure": 1.2,
-      "anti_aliasing": false,
-      "bloom_threshold": 0.7,
-      "motion_blur_ms": 24.0,
-      "noise": 0.055,
-      "radial_distortion_coefficients": [-0.08, 0.02],
-      "display_overlay": {
-        "scanline_spacing_px": 3,
-        "scanline_alpha": 0.09,
-        "sync_band_rows": [90, 180],
-        "sync_band_height_px": 2
+    "default_video_style": "digital",
+    "available_video_styles": ["digital", "analog"],
+    "source_cameras": {
+      "digital": {
+        "device_name": "pilot digital camera",
+        "resolution": [480, 270],
+        "field_of_view_rad": 2.0943951,
+        "translation_m": [0.065, 0.0, 0.02],
+        "rotation_axis_angle": [0.0, 1.0, 0.0, -0.3839724354387525],
+        "exposure": 1.0,
+        "anti_aliasing": true,
+        "bloom_threshold": -1.0,
+        "motion_blur_ms": 0.0,
+        "noise": 0.0,
+        "display_overlay": false,
+        "model_scope": "clean low-latency simulator video path; not a calibrated digital air-unit, codec, RF, receiver, or display model"
       },
-      "model_scope": "visual analog-style degradation only; not a calibrated RF, transmitter, receiver, or composite-video signal model"
+      "analog": {
+        "device_name": "pilot analog camera",
+        "resolution": [480, 270],
+        "field_of_view_rad": 2.0943951,
+        "translation_m": [0.065, 0.0, 0.02],
+        "rotation_axis_angle": [0.0, 1.0, 0.0, -0.3839724354387525],
+        "exposure": 1.2,
+        "anti_aliasing": false,
+        "bloom_threshold": 0.7,
+        "motion_blur_ms": 24.0,
+        "noise": 0.055,
+        "radial_distortion_coefficients": [-0.08, 0.02],
+        "display_overlay": {
+          "scanline_spacing_px": 3,
+          "scanline_alpha": 0.09,
+          "sync_band_rows": [90, 180],
+          "sync_band_height_px": 2
+        },
+        "model_scope": "visual analog-style degradation only; not a calibrated RF, transmitter, receiver, or composite-video signal model"
+      }
     }
   },
   "video_outages": {
@@ -92,13 +110,13 @@
     ]
   },
   "locked_files": {
-    "worlds/dream_mode_research.wbt": "b59228e45f7b4ee245132494c509da1e76c9b67f9c4456874db0ea37b9538538",
+    "worlds/dream_mode_research.wbt": "64c8077db3b15bd816ef7142f37a93934d1b014948b67644a9c7287179ab60ae",
     "protos/FpvResearchQuad.proto": "d23616a115cc0f40d0426b809c504113ebde4c001cbab9ff34235753291eadfd",
-    "config/controller.json": "3697b431b1683c903b06ce4358c55fb9a0faf1fcca47f90cc72f7ea273f67342",
+    "config/controller.json": "0d689e09986e5b328d081f515b9a400932cd2084ac21d1baf0331d30ddbf9424",
     "config/course_zones.json": "7f2cb474bf63bea887715bd76294d73fd6ed101b46e82b1289a93e46eb8abea5",
     "config/apex_t19_calibration_v1.json": "065f0d5a55a42a3da875332a835a3238b7876df0aa6480a6470d87498be6630c",
     "config/outage_baselines_v1.json": "a8c421f17a7f2a4fe3c393c32e769a8720d4c902e04143bdbea97b2bab28bc3f",
-    "controllers/dream_mode_controller/dream_mode_controller.py": "1105ab4216558d36158027e400a8574c30eb31be51d7972240e37a136c86f1a3",
+    "controllers/dream_mode_controller/dream_mode_controller.py": "3ae4fd0d452e3ba0aeb517791b68f7954ad80a88e609a85d3b0053e988b39f49",
     "controllers/dream_mode_controller/input_mapping.py": "cf4d6cbf519f7ae5e1068997875072c27325c8f9305c71c77ec0f239c37f1fbf",
     "controllers/dream_mode_controller/apparatus.py": "0eb99b406b7d1961f9f7b831b31306542c1a2fc059d32f0a899b9ce1fc6c6892",
     "controllers/dream_mode_controller/outage_baselines.py": "6dddb7bb19eb002141522d7dda2d7ae4280a24cba29c86dd782283976c3edbf4",

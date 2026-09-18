@@ -371,6 +371,8 @@ def validate_artifacts(run_dir: Path, expected_script: list[dict]) -> dict:
     safety = outage_manifest.get("research_overlay_safety", {})
     require(
         safety.get("research_camera_visible") is False
+        and safety.get("pilot_digital_camera_visible") is False
+        and safety.get("pilot_analog_camera_visible") is False
         and safety.get("depth_visible") is False,
         "hidden-truth rendering overlays were not proven hidden",
     )
@@ -381,6 +383,16 @@ def validate_artifacts(run_dir: Path, expected_script: list[dict]) -> dict:
     require(
         outage_manifest.get("physical_display_readback") is True,
         "acceptance run did not enable physical Display readback",
+    )
+    pilot_style = outage_manifest.get("pilot_display", {}).get("video_style")
+    require(
+        pilot_style in {"digital", "analog"},
+        "manifest pilot video style is invalid",
+    )
+    expected_style = os.environ.get("DREAM_MODE_VIDEO_STYLE", "digital").lower()
+    require(
+        pilot_style == expected_style,
+        "manifest pilot video style does not match the requested style",
     )
 
     event_types = [event.get("type") for event in events]
@@ -529,14 +541,20 @@ def validate_artifacts(run_dir: Path, expected_script: list[dict]) -> dict:
             (anchor_width, anchor_height) == RGB_SIZE,
             f"{event_id} anchor dimensions are wrong",
         )
-        require(
-            pilot_source_anchor_rgb != recorded_anchor_rgb,
-            f"{event_id} pilot source is not visually degraded",
-        )
-        require(
-            anchor_rgb != recorded_anchor_rgb,
-            f"{event_id} physical Display anchor is not visually degraded",
-        )
+        if pilot_style == "analog":
+            require(
+                pilot_source_anchor_rgb != recorded_anchor_rgb,
+                f"{event_id} analog pilot source is not visually degraded",
+            )
+            require(
+                anchor_rgb != pilot_source_anchor_rgb,
+                f"{event_id} analog display overlay is missing",
+            )
+        else:
+            require(
+                anchor_rgb == pilot_source_anchor_rgb,
+                f"{event_id} digital display altered its clean pilot source",
+            )
         require((mid_width, mid_height) == RGB_SIZE, f"{event_id} mid dimensions are wrong")
         require((last_width, last_height) == RGB_SIZE, f"{event_id} last dimensions are wrong")
         require(

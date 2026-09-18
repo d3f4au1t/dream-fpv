@@ -35,7 +35,7 @@ class ApparatusFreezeTests(unittest.TestCase):
 
     def test_frozen_identity_and_seed_are_locked(self):
         self.assertEqual(self.apparatus["apparatus_id"], "dream_fpv_webots")
-        self.assertEqual(self.apparatus["version"], "2.1.0")
+        self.assertEqual(self.apparatus["version"], "2.2.0")
         self.assertEqual(self.apparatus["status"], "frozen")
         self.assertEqual(self.apparatus["random_seed"], 1907)
         self.assertEqual(len(self.manifest_hash), 64)
