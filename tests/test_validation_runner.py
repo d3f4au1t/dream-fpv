@@ -32,6 +32,26 @@ class ValidationRunnerTests(unittest.TestCase):
     def test_acceptance_suite_has_72_scenarios(self):
         self.assertEqual(len(VALIDATION.build_scenarios()), 72)
 
+    def test_single_session_queue_preserves_scenario_order_and_isolation(self):
+        scenarios = [minimal_scenario("first"), minimal_scenario("second")]
+        run_root = Path("/tmp/dream-mode-single-session")
+        queue = VALIDATION.build_single_session_queue(scenarios, run_root)
+
+        self.assertEqual(queue["next_index"], 0)
+        self.assertEqual(queue["completed"], [])
+        self.assertEqual(
+            [scenario["name"] for scenario in queue["scenarios"]],
+            ["first", "second"],
+        )
+        self.assertEqual(
+            queue["scenarios"][1]["environment"]["DREAM_MODE_LOG_DIR"],
+            str(run_root / "second"),
+        )
+        self.assertEqual(
+            queue["scenarios"][0]["environment"]["DREAM_MODE_SMOKE_STEPS"],
+            "13",
+        )
+
     def test_retryable_startup_failure_uses_fresh_directories(self):
         scenario = minimal_scenario()
         sentinel = object()

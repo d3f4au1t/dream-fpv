@@ -524,30 +524,17 @@ class WebotsStartupError(RuntimeError):
     """A retryable failure before the controller created its run manifest."""
 
 
-def _run_scenario_once(scenario: Scenario, log_dir: Path) -> Result:
-    output_path = log_dir / "webots-output.txt"
-    error_path = log_dir / "webots-error.txt"
-    launcher_path = log_dir / "launcher-output.txt"
-    telemetry_path = log_dir / "telemetry.csv"
-    marker_path = log_dir / "smoke_test_ok.json"
-    run_manifest_path = log_dir / "run_manifest.json"
+def scenario_environment(scenario: Scenario, log_dir: Path) -> dict[str, str]:
     steps = math.ceil(scenario.duration_s / TIME_STEP_SECONDS)
-    environment = os.environ.copy()
-    for name in tuple(environment):
-        if name.startswith("DREAM_MODE_"):
-            environment.pop(name)
-    environment.update({
+    environment = {
         "DREAM_MODE_SMOKE_STEPS": str(steps),
         "DREAM_MODE_COMMAND_SEQUENCE": json.dumps(scenario.sequence),
         "DREAM_MODE_INITIAL_ALTITUDE": str(scenario.initial_altitude),
         "DREAM_MODE_LOG_PERIOD_SECONDS": str(TIME_STEP_SECONDS),
         "DREAM_MODE_DISABLE_JOYSTICK": "1",
         "DREAM_MODE_LOG_DIR": str(log_dir),
-        "PYTHONDONTWRITEBYTECODE": "1",
-        # Prevent Qt from transforming this command-line process into the
-        # foreground macOS application. This is what keeps user focus intact.
-        "QT_MAC_DISABLE_FOREGROUND_APPLICATION_TRANSFORM": "1",
-    })
+        "DREAM_MODE_SKIP_INITIAL_CAPTURE": "1",
+    }
     if not scenario.recovery_enabled:
         environment["DREAM_MODE_DISABLE_RECOVERY"] = "1"
     if scenario.bypass_arming:
@@ -568,8 +555,27 @@ def _run_scenario_once(scenario: Scenario, log_dir: Path) -> Result:
         environment["DREAM_MODE_INVERTED_CRASH_STEP"] = str(
             scenario.inverted_crash_step
         )
-    environment["DREAM_MODE_SKIP_INITIAL_CAPTURE"] = "1"
+    return environment
 
+
+def _run_scenario_once(scenario: Scenario, log_dir: Path) -> Result:
+    output_path = log_dir / "webots-output.txt"
+    error_path = log_dir / "webots-error.txt"
+    launcher_path = log_dir / "launcher-output.txt"
+    telemetry_path = log_dir / "telemetry.csv"
+    marker_path = log_dir / "smoke_test_ok.json"
+    run_manifest_path = log_dir / "run_manifest.json"
+    environment = os.environ.copy()
+    for name in tuple(environment):
+        if name.startswith("DREAM_MODE_"):
+            environment.pop(name)
+    environment.update(scenario_environment(scenario, log_dir))
+    environment.update({
+        "PYTHONDONTWRITEBYTECODE": "1",
+        # Prevent Qt from transforming this command-line process into the
+        # foreground macOS application. This is what keeps user focus intact.
+        "QT_MAC_DISABLE_FOREGROUND_APPLICATION_TRANSFORM": "1",
+    })
     port = available_port()
     command = [
         "/usr/bin/open",
@@ -650,6 +656,13 @@ def _run_scenario_once(scenario: Scenario, log_dir: Path) -> Result:
         time.sleep(0.05)
     terminate_test_instance(port)
 
+    return load_scenario_result(scenario, log_dir)
+
+
+def load_scenario_result(scenario: Scenario, log_dir: Path) -> Result:
+    telemetry_path = log_dir / "telemetry.csv"
+    marker_path = log_dir / "smoke_test_ok.json"
+    run_manifest_path = log_dir / "run_manifest.json"
     if (
         not telemetry_path.is_file()
         or not marker_path.is_file()
@@ -755,6 +768,159 @@ def run_scenario(scenario: Scenario, index: int, run_root: Path) -> Result:
     raise RuntimeError(
         "Webots startup failed after 3 attempts: " + " | ".join(startup_errors)
     )
+
+
+def build_single_session_queue(
+    scenarios: list[Scenario],
+    run_root: Path,
+) -> dict:
+    return {
+        "schema_version": 1,
+        "execution_mode": "single_webots_session",
+        "next_index": 0,
+        "completed": [],
+        "scenarios": [
+            {
+                "name": scenario.name,
+                "environment": scenario_environment(
+                    scenario,
+                    run_root / scenario.name,
+                ),
+            }
+            for scenario in scenarios
+        ],
+    }
+
+
+def run_scenarios_single_session(
+    scenarios: list[Scenario],
+    run_root: Path,
+) -> list[Result]:
+    queue_path = run_root / "single_session_queue.json"
+    with queue_path.open("x", encoding="utf-8") as output:
+        json.dump(
+            build_single_session_queue(scenarios, run_root),
+            output,
+            indent=2,
+            sort_keys=True,
+            allow_nan=False,
+        )
+        output.write("\n")
+
+    output_path = run_root / "webots-output.txt"
+    error_path = run_root / "webots-error.txt"
+    launcher_path = run_root / "launcher-output.txt"
+    environment = os.environ.copy()
+    for name in tuple(environment):
+        if name.startswith("DREAM_MODE_"):
+            environment.pop(name)
+    environment.update(
+        {
+            "DREAM_MODE_VALIDATION_QUEUE_FILE": str(queue_path),
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "QT_MAC_DISABLE_FOREGROUND_APPLICATION_TRANSFORM": "1",
+        }
+    )
+    port = available_port()
+    command = [
+        "/usr/bin/open",
+        "-F",
+        "-g",
+        "-j",
+        "-n",
+        "-a",
+        str(WEBOTS_APP),
+        "-o",
+        str(output_path),
+        "--stderr",
+        str(error_path),
+    ]
+    for name in (
+        "DREAM_MODE_VALIDATION_QUEUE_FILE",
+        "PYTHONDONTWRITEBYTECODE",
+        "QT_MAC_DISABLE_FOREGROUND_APPLICATION_TRANSFORM",
+    ):
+        command.extend(["--env", f"{name}={environment[name]}"])
+    command.extend(
+        [
+            "--args",
+            "--batch",
+            "--no-rendering",
+            "--mode=fast",
+            f"--port={port}",
+            "--stdout",
+            "--stderr",
+            str(WORLD),
+        ]
+    )
+    with launcher_path.open("x", encoding="utf-8") as launcher_output:
+        try:
+            launch = subprocess.run(
+                command,
+                cwd=PROJECT_ROOT,
+                env=environment,
+                stdout=launcher_output,
+                stderr=subprocess.STDOUT,
+                check=False,
+                timeout=8,
+            )
+        except (OSError, subprocess.TimeoutExpired) as error:
+            raise WebotsStartupError(f"could not launch Webots: {error}") from error
+    if launch.returncode != 0:
+        raise WebotsStartupError(
+            f"macOS launcher exited {launch.returncode}; see {launcher_path}"
+        )
+
+    seen_instance = False
+    completed = 0
+    launch_time = time.monotonic()
+    try:
+        while completed < len(scenarios):
+            while (
+                completed < len(scenarios)
+                and (run_root / scenarios[completed].name / "smoke_test_ok.json").is_file()
+            ):
+                completed += 1
+                print(
+                    f"[{completed}/{len(scenarios)}] "
+                    f"{scenarios[completed - 1].name}: complete",
+                    flush=True,
+                )
+            if completed == len(scenarios):
+                break
+            active_pids = webots_instance_pids(port)
+            seen_instance = seen_instance or bool(active_pids)
+            elapsed = time.monotonic() - launch_time
+            if seen_instance and not active_pids:
+                raise RuntimeError(
+                    "single Webots session exited after "
+                    f"{completed}/{len(scenarios)} scenarios; see {output_path}"
+                )
+            first_manifest = run_root / scenarios[0].name / "run_manifest.json"
+            if not first_manifest.is_file() and elapsed >= 15.0:
+                raise WebotsStartupError(
+                    "single-session controller did not initialize within 15 seconds"
+                )
+            if elapsed >= 300.0:
+                raise RuntimeError(
+                    "single Webots session timed out after 300 seconds"
+                )
+            time.sleep(0.05)
+        exit_deadline = time.monotonic() + 8.0
+        while time.monotonic() < exit_deadline and webots_instance_pids(port):
+            time.sleep(0.05)
+    finally:
+        terminate_test_instance(port)
+
+    with queue_path.open(encoding="utf-8") as source:
+        final_queue = json.load(source)
+    expected_names = [scenario.name for scenario in scenarios]
+    if final_queue.get("completed") != expected_names:
+        raise RuntimeError("single-session validation queue did not complete in order")
+    return [
+        load_scenario_result(scenario, run_root / scenario.name)
+        for scenario in scenarios
+    ]
 
 
 def first_time(rows: list[dict[str, float]], predicate) -> float | None:
@@ -1390,6 +1556,19 @@ def main() -> int:
     if not WEBOTS.is_file():
         print(f"Webots was not found at {WEBOTS}", file=sys.stderr)
         return 2
+    arguments = sys.argv[1:]
+    if any(argument != "--legacy-multi-session" for argument in arguments):
+        print(
+            "Usage: ./scripts/flight_dynamics_test.py [--legacy-multi-session]",
+            file=sys.stderr,
+        )
+        return 2
+    legacy_multi_session = bool(arguments)
+    execution_mode = (
+        "legacy_multi_session"
+        if legacy_multi_session
+        else "single_webots_session"
+    )
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
     run_root = PROJECT_ROOT / "logs" / "validation" / timestamp
     run_root.mkdir(parents=True, exist_ok=False)
@@ -1398,27 +1577,33 @@ def main() -> int:
     metrics: dict[str, dict] = {}
     results: list[Result] = []
 
-    # LaunchServices rejects bursts of concurrent hidden app launches on macOS.
-    # Run one hidden instance at a time; this also makes physics comparisons stable.
-    with ThreadPoolExecutor(max_workers=1) as executor:
-        futures = {
-            executor.submit(run_scenario, scenario, index, run_root): scenario
-            for index, scenario in enumerate(scenarios)
-        }
-        for completed, future in enumerate(as_completed(futures), start=1):
-            scenario = futures[future]
-            try:
-                results.append(future.result())
-                print(
-                    f"[{completed}/{len(scenarios)}] {scenario.name}: complete",
-                    flush=True,
-                )
-            except Exception as error:
-                failures.append(f"{scenario.name}: {error}")
-                print(
-                    f"[{completed}/{len(scenarios)}] {scenario.name}: failed",
-                    flush=True,
-                )
+    if legacy_multi_session:
+        # Retain the former runner for diagnosis, but keep it opt-in because it
+        # launches and closes one hidden Webots process per scenario.
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            futures = {
+                executor.submit(run_scenario, scenario, index, run_root): scenario
+                for index, scenario in enumerate(scenarios)
+            }
+            for completed, future in enumerate(as_completed(futures), start=1):
+                scenario = futures[future]
+                try:
+                    results.append(future.result())
+                    print(
+                        f"[{completed}/{len(scenarios)}] {scenario.name}: complete",
+                        flush=True,
+                    )
+                except Exception as error:
+                    failures.append(f"{scenario.name}: {error}")
+                    print(
+                        f"[{completed}/{len(scenarios)}] {scenario.name}: failed",
+                        flush=True,
+                    )
+    else:
+        try:
+            results = run_scenarios_single_session(scenarios, run_root)
+        except Exception as error:
+            failures.append(f"single_webots_session: {error}")
 
     for result in sorted(results, key=lambda item: item.scenario.name):
         if not assert_common(result, failures):
@@ -1495,6 +1680,8 @@ def main() -> int:
 
     report = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
+        "execution_mode": execution_mode,
+        "webots_session_count": 1 if not legacy_multi_session else len(results),
         "apparatus": apparatus_record,
         "scenario_count": len(scenarios),
         "completed_scenario_count": len(results),

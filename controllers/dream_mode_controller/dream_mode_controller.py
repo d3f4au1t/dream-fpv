@@ -44,6 +44,43 @@ from outage_baselines import (
 from outage_artifacts import write_bgra_png, write_depth_bundle
 
 
+VALIDATION_QUEUE_ENV = "DREAM_MODE_VALIDATION_QUEUE_FILE"
+
+
+def configure_single_session_validation() -> tuple[Path, int, str, int] | None:
+    """Load one validation scenario before the Webots controller is initialized."""
+    configured = os.environ.get(VALIDATION_QUEUE_ENV)
+    if not configured:
+        return None
+    queue_path = Path(configured).expanduser().resolve()
+    with queue_path.open(encoding="utf-8") as source:
+        queue = json.load(source)
+    if queue.get("schema_version") != 1:
+        raise ValueError("Validation queue schema_version must be 1")
+    scenarios = queue.get("scenarios")
+    next_index = queue.get("next_index")
+    if not isinstance(scenarios, list) or not scenarios:
+        raise ValueError("Validation queue scenarios must be a non-empty list")
+    if type(next_index) is not int or not 0 <= next_index < len(scenarios):
+        raise ValueError("Validation queue next_index is out of range")
+    scenario = scenarios[next_index]
+    if not isinstance(scenario, dict) or not isinstance(scenario.get("name"), str):
+        raise ValueError("Validation queue scenario name is invalid")
+    overrides = scenario.get("environment")
+    if not isinstance(overrides, dict) or not overrides:
+        raise ValueError("Validation queue scenario environment is invalid")
+    for name, value in overrides.items():
+        if (
+            not isinstance(name, str)
+            or not name.startswith("DREAM_MODE_")
+            or name == VALIDATION_QUEUE_ENV
+            or not isinstance(value, str)
+        ):
+            raise ValueError("Validation queue contains an invalid environment override")
+        os.environ[name] = value
+    return queue_path, next_index, scenario["name"], len(scenarios)
+
+
 class DreamModeController(Supervisor):
     LOG_PERIOD_SECONDS = 0.04
     TELEMETRY_FLUSH_PERIOD_SECONDS = 0.5
@@ -51,8 +88,12 @@ class DreamModeController(Supervisor):
     DEPTH_PERIOD_MS = 64
     MAX_RAW_AXES = 8
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        validation_queue: tuple[Path, int, str, int] | None = None,
+    ) -> None:
         super().__init__()
+        self.validation_queue = validation_queue
         self.time_step = int(self.getBasicTimeStep())
         webots_project_root = Path(self.getProjectPath()).resolve()
         source_project_root = Path(__file__).resolve().parents[2]
@@ -379,6 +420,37 @@ class DreamModeController(Supervisor):
         path = self.project_root / "config" / "controller.json"
         with path.open(encoding="utf-8") as config_file:
             return json.load(config_file)
+
+    def _advance_validation_queue(self) -> bool:
+        """Persist completion and report whether another scenario remains."""
+        if self.validation_queue is None:
+            return False
+        queue_path, scenario_index, scenario_name, scenario_count = (
+            self.validation_queue
+        )
+        with queue_path.open(encoding="utf-8") as source:
+            queue = json.load(source)
+        if queue.get("next_index") != scenario_index:
+            raise RuntimeError("Validation queue position changed during a scenario")
+        scenarios = queue.get("scenarios", [])
+        if (
+            len(scenarios) != scenario_count
+            or scenarios[scenario_index].get("name") != scenario_name
+        ):
+            raise RuntimeError("Validation queue contents changed during a scenario")
+        completed = queue.setdefault("completed", [])
+        if not isinstance(completed, list) or scenario_name in completed:
+            raise RuntimeError("Validation queue completion history is invalid")
+        completed.append(scenario_name)
+        queue["next_index"] = scenario_index + 1
+        temporary = queue_path.with_name(
+            f".{queue_path.name}.{os.getpid()}.tmp"
+        )
+        with temporary.open("x", encoding="utf-8") as output:
+            json.dump(queue, output, indent=2, sort_keys=True, allow_nan=False)
+            output.write("\n")
+        temporary.replace(queue_path)
+        return queue["next_index"] < scenario_count
 
     def _verify_research_overlay_safety(self, outage_mode: str) -> dict:
         """Reject an experiment if a live hidden-truth overlay is visible."""
@@ -2146,6 +2218,7 @@ class DreamModeController(Supervisor):
     def run(self) -> None:
         run_outcome = "stopped"
         run_error = None
+        reload_for_validation = False
         try:
             while self.step(self.time_step) != -1:
                 self.step_count += 1
@@ -2275,7 +2348,9 @@ class DreamModeController(Supervisor):
                         self.telemetry_file.flush()
                     print(f"SMOKE_TEST_OK steps={self.step_count} log={self.run_dir}")
                     run_outcome = "completed"
-                    self.simulationQuit(0)
+                    reload_for_validation = self._advance_validation_queue()
+                    if not reload_for_validation:
+                        self.simulationQuit(0)
                     break
         except Exception as error:
             run_outcome = "error"
@@ -2318,7 +2393,10 @@ class DreamModeController(Supervisor):
                 except (OSError, ValueError):
                     pass
             self._close_joystick()
+        if reload_for_validation:
+            print("Reloading world for the next single-session validation scenario.")
+            self.worldReload()
 
 
 if __name__ == "__main__":
-    DreamModeController().run()
+    DreamModeController(configure_single_session_validation()).run()

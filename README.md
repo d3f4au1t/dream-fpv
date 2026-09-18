@@ -2,7 +2,7 @@
 
 Dream FPV is a Webots-based FPV research simulator for controlled video-loss experiments. It includes an acro quad model, a technical practice course, a camera-backed pilot view, synchronized RGB/depth capture, external-controller input, recovery logic, and timestamped telemetry.
 
-The frozen Phase 1 flight baseline is tagged `apparatus-v1.0.0`. Phase 2 keeps that flight model and course unchanged and adds reproducible black-screen and frozen-frame outage baselines. See the [Phase 1 apparatus record](docs/APPARATUS_V1.md), [Phase 2 apparatus record](docs/APPARATUS_V2.md), [project handoff](docs/HANDOFF.md), and the corresponding validation summaries under [`validation/`](validation/).
+The frozen Phase 1 flight baseline is tagged `apparatus-v1.0.0`. Phase 2 keeps that flight model and course unchanged and adds reproducible black-screen and frozen-frame outage baselines. The current Phase 2 patch release is `apparatus-v2.0.1`. See the [Phase 1 apparatus record](docs/APPARATUS_V1.md), [Phase 2 apparatus record](docs/APPARATUS_V2.md), [project handoff](docs/HANDOFF.md), and the corresponding validation summaries under [`validation/`](validation/).
 
 This is an experimental software apparatus, not a validated digital twin of a physical aircraft.
 
@@ -200,7 +200,7 @@ Run the full 72-scenario flight-dynamics suite:
 ./scripts/flight_dynamics_test.py
 ```
 
-The simulator tests launch hidden Webots instances on macOS. They do not minimize or activate the user's current window.
+The dynamics runner executes all 72 scenarios in one hidden Webots session, reloading the world between scenarios without repeatedly opening and closing the application. The other simulator tests also launch hidden Webots instances on macOS. They do not minimize or activate the user's current window.
 
 ## Repository layout
 

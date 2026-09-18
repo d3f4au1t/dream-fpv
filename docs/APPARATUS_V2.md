@@ -1,6 +1,6 @@
-# Dream FPV Experimental Apparatus v2.0.0
+# Dream FPV Experimental Apparatus v2.0.1
 
-Status: **frozen** on 2026-09-16.
+Status: **frozen** on 2026-09-18.
 
 Version 2 adds reproducible pilot-video interruption baselines to the Phase 1
 flight apparatus. It is intended for controlled simulator experiments that
@@ -210,8 +210,15 @@ python3 -m unittest discover -s tests -v
 ```
 
 The signed-off result is stored in
-`validation/apparatus-v2.0.0.json` and the validated source is tagged
-`apparatus-v2.0.0`.
+`validation/apparatus-v2.0.1.json` and the validated source is tagged
+`apparatus-v2.0.1`.
+
+The flight-dynamics runner uses one hidden Webots process for the complete
+72-scenario suite. It reloads the frozen world between isolated scenarios,
+which resets simulation time, fields, physics, devices and the controller
+without repeatedly creating and closing application windows. The former
+multi-process behavior remains available only for diagnosis with
+`--legacy-multi-session`.
 
 ## Validity boundary
 
@@ -240,5 +247,5 @@ The signed-off result is stored in
   scenarios pass.
 - Two end-to-end outage replays pass every duration in both conditions with
   exact timing, valid artifacts, and no aborted or pending events.
-- The validation summary and `apparatus-v2.0.0` Git tag identify the frozen
+- The validation summary and `apparatus-v2.0.1` Git tag identify the frozen
   source used for the apparatus.

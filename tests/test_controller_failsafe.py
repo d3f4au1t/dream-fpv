@@ -116,6 +116,51 @@ class FakeNode:
 
 
 class ControllerFailsafeTests(unittest.TestCase):
+    def test_single_session_queue_configures_and_advances_one_scenario(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            queue_path = Path(temporary_directory) / "queue.json"
+            queue_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "next_index": 0,
+                        "completed": [],
+                        "scenarios": [
+                            {
+                                "name": "scenario_a",
+                                "environment": {
+                                    "DREAM_MODE_LOG_DIR": str(
+                                        Path(temporary_directory) / "scenario_a"
+                                    ),
+                                    "DREAM_MODE_SMOKE_STEPS": "10",
+                                },
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with patch.dict(
+                CONTROLLER_MODULE.os.environ,
+                {CONTROLLER_MODULE.VALIDATION_QUEUE_ENV: str(queue_path)},
+                clear=True,
+            ):
+                configured = (
+                    CONTROLLER_MODULE.configure_single_session_validation()
+                )
+                self.assertEqual(
+                    CONTROLLER_MODULE.os.environ["DREAM_MODE_SMOKE_STEPS"],
+                    "10",
+                )
+
+            controller = DreamModeController.__new__(DreamModeController)
+            controller.validation_queue = configured
+            self.assertFalse(controller._advance_validation_queue())
+            updated = json.loads(queue_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(updated["next_index"], 1)
+        self.assertEqual(updated["completed"], ["scenario_a"])
+
     def test_configured_run_directory_rejects_rotated_telemetry(self):
         controller = DreamModeController.__new__(DreamModeController)
         with tempfile.TemporaryDirectory() as temporary_directory:
