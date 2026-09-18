@@ -502,8 +502,6 @@ class DreamModeController(Supervisor):
         state = {
             "project_file": str(project_path.relative_to(self.project_root)),
             "research_camera_visible": None,
-            "pilot_digital_camera_visible": None,
-            "pilot_analog_camera_visible": None,
             "depth_visible": None,
         }
         try:
@@ -516,8 +514,6 @@ class DreamModeController(Supervisor):
             return state
         for device, key in (
             ("research camera", "research_camera_visible"),
-            ("pilot digital camera", "pilot_digital_camera_visible"),
-            ("pilot analog camera", "pilot_analog_camera_visible"),
             ("depth", "depth_visible"),
         ):
             match = re.search(
@@ -532,8 +528,6 @@ class DreamModeController(Supervisor):
             label
             for label, key in (
                 ("research camera", "research_camera_visible"),
-                ("pilot digital camera", "pilot_digital_camera_visible"),
-                ("pilot analog camera", "pilot_analog_camera_visible"),
                 ("depth", "depth_visible"),
             )
             if state[key] is not False

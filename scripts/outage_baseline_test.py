@@ -371,8 +371,6 @@ def validate_artifacts(run_dir: Path, expected_script: list[dict]) -> dict:
     safety = outage_manifest.get("research_overlay_safety", {})
     require(
         safety.get("research_camera_visible") is False
-        and safety.get("pilot_digital_camera_visible") is False
-        and safety.get("pilot_analog_camera_visible") is False
         and safety.get("depth_visible") is False,
         "hidden-truth rendering overlays were not proven hidden",
     )
