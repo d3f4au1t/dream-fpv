@@ -160,15 +160,18 @@ Phase 2 implements a reproducible link-loss experiment without prediction.
 
 ### Pilot display path
 
-The research camera is attached to a 480 × 270 Webots `Display`. A textured
-physical screen immediately in front of the mounted FPV `Viewpoint` fills the
-main view. The display surface is a direct `Shape` child with a
-`PBRAppearance`, matching Webots' supported camera-display pattern.
+The clean research camera and a dedicated analog-style pilot camera share the
+same 480 × 270 geometry. Only the pilot camera is attached to the Webots
+`Display`; it adds noise, 24 ms motion persistence, highlight bloom, mild
+barrel distortion, scanlines and faint sync bands while the research camera
+remains pristine hidden ground truth. A textured physical screen immediately
+in front of the mounted FPV `Viewpoint` keeps a 16:9 shape but overscans every
+viewport edge, preventing the live 3D scene from leaking through above it.
 
-The project file keeps the depth, research-camera and duplicate pilot-display
-overlay panes hidden. The physical display is hidden from the RGB and depth
-sensors with `setVisibility`, preventing feedback while preserving hidden
-ground truth.
+The project file keeps the depth, both camera and duplicate pilot-display
+overlay panes hidden. The physical display is hidden from the clean RGB,
+pilot-camera and depth sensors with `setVisibility`, preventing feedback while
+preserving hidden ground truth.
 
 ### Conditions
 
@@ -345,6 +348,8 @@ complete direct evidence in `apparatus-v2.0.1`.
   imagery or uncertainty model.
 - The emulator does not model RF propagation, packet loss, codec buffering,
   decoder concealment, compression damage or hardware display latency.
+- The analog-style feed is visual rather than physically calibrated; it must
+  not be presented as a measured model of a camera/VTX/receiver/goggle chain.
 - Spatial-zone entry labels trigger locations but does not prove a correct gate
   crossing direction.
 - Direct HID support is decoder- and calibration-specific. Unknown controllers

@@ -1,4 +1,4 @@
-# Dream FPV Experimental Apparatus v2.0.1
+# Dream FPV Experimental Apparatus v2.1.0
 
 Status: **frozen** on 2026-09-18.
 
@@ -28,10 +28,17 @@ Git tag. A digest must not be updated only to silence a failed integrity check.
 
 ## Pilot-view path
 
-The research camera renders at 480 × 270 with a 16 ms sampling period, 120°
-horizontal field of view, and 22° uptilt. Its live output is attached to a
-Webots `Display` that fills the mounted pilot viewpoint. Outage commands affect
-that display, not the aircraft dynamics.
+The clean research camera and dedicated pilot camera both render at 480 × 270
+with a 16 ms sampling period, 120° horizontal field of view, and 22° uptilt.
+Only the pilot camera is attached to the Webots `Display`. It applies
+analog-style sensor noise, 24 ms motion persistence, highlight bloom, mild
+barrel distortion, scanlines, and two faint horizontal sync bands. The clean
+research camera remains a separate hidden ground-truth path.
+
+The textured physical screen keeps a 16:9 shape but extends beyond every edge
+of the mounted pilot viewport. This deliberate overscan crops the screen rather
+than allowing the brighter live 3D scene to show above it. Outage commands
+affect that display, not the aircraft dynamics.
 
 During an outage:
 
@@ -41,8 +48,8 @@ During an outage:
 - a vehicle recovery aborts the active outage and returns the display to live
   video.
 
-The run manifest records the display dimensions and period, the overlay-safety
-check, and whether acceptance-only display readback was enabled.
+The run manifest records the display dimensions, source camera, period, the
+overlay-safety check, and whether acceptance-only display readback was enabled.
 
 ## Baseline conditions and timing
 
@@ -166,7 +173,10 @@ Each completed per-event directory contains:
   interruption;
 - `return_rgb.png`, captured as the display returns to live video;
 - `pilot_anchor.png`, `pilot_mid.png`, `pilot_last.png`, and
-  `pilot_return.png`, representing the pilot output across the transition.
+  `pilot_return.png`, representing the physical pilot output across the
+  transition;
+- `pilot_source_anchor.png`, preserving the degraded pilot-camera source before
+  the display-layer scanlines and sync bands are composited.
 
 Sensor buffers are copied in memory at their experimental timestamps. Routine
 PNG compression and disk writes are deferred until the flight has finished so
@@ -210,8 +220,8 @@ python3 -m unittest discover -s tests -v
 ```
 
 The signed-off result is stored in
-`validation/apparatus-v2.0.1.json` and the validated source is tagged
-`apparatus-v2.0.1`.
+`validation/apparatus-v2.1.0.json` and the validated source is tagged
+`apparatus-v2.1.0`.
 
 The flight-dynamics runner uses one hidden Webots process for the complete
 72-scenario suite. It reloads the frozen world between isolated scenarios,
@@ -225,6 +235,9 @@ multi-process behavior remains available only for diagnosis with
 - The outage emulator changes only the rendered pilot view. It does not model
   packet loss, RF propagation, encoding, buffering, decoder concealment,
   compression artifacts, link recovery, or display hardware latency.
+- The analog-style pilot feed is a visual treatment. Its noise, persistence,
+  bloom, distortion and line artifacts have not been calibrated against a
+  physical camera, VTX, receiver or goggle display.
 - Phase 2 contains no predicted imagery, optical-flow extrapolation, learned
   model, uncertainty estimate, or safety cue.
 - The physical coefficients remain simulator-tuned rather than identified from
@@ -247,5 +260,5 @@ multi-process behavior remains available only for diagnosis with
   scenarios pass.
 - Two end-to-end outage replays pass every duration in both conditions with
   exact timing, valid artifacts, and no aborted or pending events.
-- The validation summary and `apparatus-v2.0.1` Git tag identify the frozen
+- The validation summary and `apparatus-v2.1.0` Git tag identify the frozen
   source used for the apparatus.
