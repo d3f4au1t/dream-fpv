@@ -395,6 +395,7 @@ def verify_semantic_claims(apparatus: dict, zones: dict, config: dict) -> None:
         ).read_text(encoding="utf-8")
         for device in (
             "depth",
+            "pilot analog camera",
             "pilot display",
             "research camera",
         ):

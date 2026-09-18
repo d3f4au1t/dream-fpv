@@ -312,6 +312,7 @@ class WorldLayoutTests(unittest.TestCase):
         # duplicate pane over the physical FPV screen.
         for device in (
             "depth",
+            "pilot analog camera",
             "pilot display",
             "research camera",
         ):
