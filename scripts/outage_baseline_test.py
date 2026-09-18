@@ -490,6 +490,7 @@ def validate_artifacts(run_dir: Path, expected_script: list[dict]) -> dict:
             "anchor_depth.f32",
             "anchor_depth.json",
             "pilot_anchor.png",
+            "pilot_source_anchor.png",
             "hidden_mid_rgb.png",
             "pilot_mid.png",
             "pilot_last.png",
@@ -515,6 +516,9 @@ def validate_artifacts(run_dir: Path, expected_script: list[dict]) -> dict:
         anchor_width, anchor_height, anchor_rgb = png_rgb(
             artifact_dir / "pilot_anchor.png"
         )
+        _, _, pilot_source_anchor_rgb = png_rgb(
+            artifact_dir / "pilot_source_anchor.png"
+        )
         _, _, recorded_anchor_rgb = png_rgb(artifact_dir / "anchor_rgb.png")
         mid_width, mid_height, mid_rgb = png_rgb(artifact_dir / "pilot_mid.png")
         last_width, last_height, last_rgb = png_rgb(artifact_dir / "pilot_last.png")
@@ -526,8 +530,12 @@ def validate_artifacts(run_dir: Path, expected_script: list[dict]) -> dict:
             f"{event_id} anchor dimensions are wrong",
         )
         require(
-            anchor_rgb == recorded_anchor_rgb,
-            f"{event_id} physical Display anchor differs from the RGB anchor",
+            anchor_rgb == pilot_source_anchor_rgb,
+            f"{event_id} physical Display anchor differs from the pilot source",
+        )
+        require(
+            pilot_source_anchor_rgb != recorded_anchor_rgb,
+            f"{event_id} pilot source is not visually degraded",
         )
         require((mid_width, mid_height) == RGB_SIZE, f"{event_id} mid dimensions are wrong")
         require((last_width, last_height) == RGB_SIZE, f"{event_id} last dimensions are wrong")

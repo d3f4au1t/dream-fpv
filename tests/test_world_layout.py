@@ -282,8 +282,8 @@ class WorldLayoutTests(unittest.TestCase):
         self.assertIn("position -6.935 0 0.05", self.world)
         self.assertIn("near 0.05", self.world)
         self.assertIn("far 0.052", self.world)
-        self.assertEqual(self.world.count("translation 0.065 0 0.02"), 2)
-        self.assertEqual(self.world.count("rotation 0 1 0 -0.3839724354387525"), 3)
+        self.assertEqual(self.world.count("translation 0.065 0 0.02"), 3)
+        self.assertEqual(self.world.count("rotation 0 1 0 -0.3839724354387525"), 4)
 
     def test_pilot_view_is_a_camera_backed_physical_display(self):
         display_match = re.search(
@@ -304,22 +304,36 @@ class WorldLayoutTests(unittest.TestCase):
         self.assertIn("roughness 1", display)
         self.assertIn("metalness 0", display)
         self.assertIn("geometry IndexedFaceSet {", display)
-        self.assertIn("0 0.0885 0.05", display)
-        self.assertIn("0 -0.0885 -0.05", display)
+        self.assertIn("0 0.142222 0.08", display)
+        self.assertIn("0 -0.142222 -0.08", display)
         self.assertNotIn("boundingObject", display)
 
         # Rendering-device overlays would either bypass the emulator or add a
         # duplicate pane over the physical FPV screen.
-        for device in ("depth", "pilot display", "research camera"):
+        for device in (
+            "depth",
+            "pilot analog camera",
+            "pilot display",
+            "research camera",
+        ):
             self.assertRegex(
                 self.project,
                 rf"renderingDevicePerspectives: Dream Mode Drone:{re.escape(device)};0;",
             )
 
-    def test_only_named_research_camera_is_present(self):
-        self.assertEqual(self.world.count("Camera {"), 1)
+    def test_research_and_pilot_cameras_are_separate(self):
+        self.assertEqual(self.world.count("Camera {"), 2)
         self.assertNotIn("Camera {", self.proto)
         self.assertIn('name "research camera"', self.world)
+        self.assertIn('name "pilot analog camera"', self.world)
+        pilot = self.world.split('name "pilot analog camera"', 1)[1].split(
+            "Display {", 1
+        )[0]
+        self.assertIn("exposure 1.2", pilot)
+        self.assertIn("bloomThreshold 0.7", pilot)
+        self.assertIn("motionBlur 24", pilot)
+        self.assertIn("noise 0.055", pilot)
+        self.assertIn("radialCoefficients -0.08 0.02", pilot)
 
     def test_all_course_sections_are_present(self):
         for name in (

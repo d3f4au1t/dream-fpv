@@ -185,6 +185,9 @@ class DreamModeController(Supervisor):
         self.camera = self._enable_device(
             "research camera", self.CAMERA_PERIOD_MS
         )
+        self.pilot_camera = self._enable_device(
+            "pilot analog camera", self.CAMERA_PERIOD_MS
+        )
         self.depth = self._enable_device("depth", self.DEPTH_PERIOD_MS)
         self.continuous_research_sensors = (
             os.environ.get("DREAM_MODE_CONTINUOUS_SENSORS") == "1"
@@ -198,19 +201,28 @@ class DreamModeController(Supervisor):
         if self.pilot_display is None:
             raise RuntimeError('Required Webots device "pilot display" is missing')
         if (
-            self.pilot_display.getWidth() != self.camera.getWidth()
-            or self.pilot_display.getHeight() != self.camera.getHeight()
+            self.pilot_display.getWidth() != self.pilot_camera.getWidth()
+            or self.pilot_display.getHeight() != self.pilot_camera.getHeight()
         ):
-            raise RuntimeError("Pilot display dimensions must match the RGB camera")
+            raise RuntimeError(
+                "Pilot display dimensions must match the analog pilot camera"
+            )
         self.pilot_display_node = self.getFromDevice(self.pilot_display._tag)
         camera_node = self.getFromDevice(self.camera._tag)
+        pilot_camera_node = self.getFromDevice(self.pilot_camera._tag)
         depth_node = self.getFromDevice(self.depth._tag)
-        if self.pilot_display_node is None or camera_node is None or depth_node is None:
+        if (
+            self.pilot_display_node is None
+            or camera_node is None
+            or pilot_camera_node is None
+            or depth_node is None
+        ):
             raise RuntimeError("Could not resolve Phase 2 rendering devices")
         # The pilot display sits directly in front of the mounted Viewpoint.
         # Hide that surface from both research sensors to avoid recursively
         # capturing the display instead of the simulated world.
         self.pilot_display_node.setVisibility(camera_node, False)
+        self.pilot_display_node.setVisibility(pilot_camera_node, False)
         self.pilot_display_node.setVisibility(depth_node, False)
         self.pilot_display.setAlpha(0.0)
         self.pilot_display.setOpacity(1.0)
@@ -220,9 +232,9 @@ class DreamModeController(Supervisor):
             self.pilot_display.getWidth(),
             self.pilot_display.getHeight(),
         )
-        self.pilot_display.attachCamera(self.camera)
+        self.pilot_display.attachCamera(self.pilot_camera)
         self.pilot_frame_selector = PilotFrameSelector(
-            self.camera.getWidth() * self.camera.getHeight() * 4
+            self.pilot_camera.getWidth() * self.pilot_camera.getHeight() * 4
         )
         self.pilot_frame_id = 0
         self.last_pilot_live_frame_id = None
@@ -458,6 +470,7 @@ class DreamModeController(Supervisor):
         state = {
             "project_file": str(project_path.relative_to(self.project_root)),
             "research_camera_visible": None,
+            "pilot_camera_visible": None,
             "depth_visible": None,
         }
         try:
@@ -470,6 +483,7 @@ class DreamModeController(Supervisor):
             return state
         for device, key in (
             ("research camera", "research_camera_visible"),
+            ("pilot analog camera", "pilot_camera_visible"),
             ("depth", "depth_visible"),
         ):
             match = re.search(
@@ -484,6 +498,7 @@ class DreamModeController(Supervisor):
             label
             for label, key in (
                 ("research camera", "research_camera_visible"),
+                ("pilot analog camera", "pilot_camera_visible"),
                 ("depth", "depth_visible"),
             )
             if state[key] is not False
@@ -719,6 +734,7 @@ class DreamModeController(Supervisor):
                 "schedule_sha256": self.outage_schedule["schedule_sha256"],
                 "pilot_display": {
                     "device": "pilot display",
+                    "source_camera": "pilot analog camera",
                     "width": self.pilot_display.getWidth(),
                     "height": self.pilot_display.getHeight(),
                     "period_ms": self.CAMERA_PERIOD_MS,
@@ -1675,7 +1691,7 @@ class DreamModeController(Supervisor):
 
     def _restore_live_pilot_display(self) -> None:
         self._clear_pilot_display_layer()
-        self.pilot_display.attachCamera(self.camera)
+        self.pilot_display.attachCamera(self.pilot_camera)
         if self.outage_display_image is not None:
             self.pilot_display.imageDelete(self.outage_display_image)
             self.outage_display_image = None
@@ -1715,11 +1731,16 @@ class DreamModeController(Supervisor):
     def _begin_outage(
         self,
         event: dict,
-        live_frame: bytes | None,
-        live_frame_sha256: str | None,
+        hidden_frame: bytes | None,
+        pilot_frame: bytes | None,
+        pilot_frame_sha256: str | None,
     ) -> None:
         processing_started = time.monotonic()
-        if live_frame is None or live_frame_sha256 is None:
+        if (
+            hidden_frame is None
+            or pilot_frame is None
+            or pilot_frame_sha256 is None
+        ):
             raise RuntimeError(
                 f"Outage {event['id']} did not start on a valid RGB-D anchor frame"
             )
@@ -1731,8 +1752,8 @@ class DreamModeController(Supervisor):
         self.outage_midpoint_saved = False
         self.outage_anchor_frame_id = self.last_pilot_live_frame_id
         self.outage_anchor_frame_time = self.last_pilot_live_frame_time
-        self.outage_anchor_sha256 = live_frame_sha256
-        self.pilot_frame_selector.begin(str(event["condition"]), live_frame)
+        self.outage_anchor_sha256 = pilot_frame_sha256
+        self.pilot_frame_selector.begin(str(event["condition"]), pilot_frame)
 
         depth_values, depth_metadata = self._capture_depth_snapshot()
         self.outage_display_image = self.pilot_display.imageCopy(
@@ -1758,12 +1779,15 @@ class DreamModeController(Supervisor):
         self.outage_current_artifact = {
             "directory": directory,
             "event_id": str(event["id"]),
-            "anchor_rgb": bytes(live_frame),
+            "anchor_rgb": bytes(hidden_frame),
             "anchor_depth_values": depth_values,
             "anchor_depth_metadata": depth_metadata,
             "hidden_mid_rgb": None,
             "return_rgb": None,
-            "pilot_frames": {"pilot_anchor.png": bytes(live_frame)},
+            "pilot_frames": {
+                "pilot_anchor.png": bytes(pilot_frame),
+                "pilot_source_anchor.png": bytes(pilot_frame),
+            },
         }
         self.outage_artifact_records.append(self.outage_current_artifact)
         self.pilot_display.detachCamera()
@@ -1822,9 +1846,10 @@ class DreamModeController(Supervisor):
     def _finish_outage(self, event: dict, *, abort_reason: str | None = None) -> None:
         record = self.outage_current_artifact
         if record is not None:
-            live_frame = bytes(self.camera.getImage())
+            hidden_frame = bytes(self.camera.getImage())
+            pilot_frame = bytes(self.pilot_camera.getImage())
             pilot_last, _ = self.pilot_frame_selector.select(
-                str(event["condition"]), live_frame
+                str(event["condition"]), pilot_frame
             )
             record["pilot_frames"]["pilot_last.png"] = pilot_last
             if self.display_readback_validation_enabled:
@@ -1832,7 +1857,7 @@ class DreamModeController(Supervisor):
                     None,
                     str(record["directory"] / "pilot_last.png"),
                 )
-            record["return_rgb"] = live_frame
+            record["return_rgb"] = hidden_frame
             self.outage_pending_return_captures.append(
                 (self.step_count + self.CAMERA_PERIOD_MS // self.time_step, record)
             )
@@ -1879,9 +1904,10 @@ class DreamModeController(Supervisor):
         self.outage_current_artifact["hidden_mid_rgb"] = bytes(
             self.camera.getImage()
         )
+        pilot_frame = bytes(self.pilot_camera.getImage())
         pilot_mid, _ = self.pilot_frame_selector.select(
             self.outage_runtime.mode,
-            self.outage_current_artifact["hidden_mid_rgb"],
+            pilot_frame,
         )
         self.outage_current_artifact["pilot_frames"]["pilot_mid.png"] = pilot_mid
         if self.display_readback_validation_enabled:
@@ -1902,8 +1928,8 @@ class DreamModeController(Supervisor):
             if self.step_count < due_step:
                 remaining.append((due_step, record))
                 continue
-            live_frame = bytes(self.camera.getImage())
-            record["pilot_frames"]["pilot_return.png"] = live_frame
+            pilot_frame = bytes(self.pilot_camera.getImage())
+            record["pilot_frames"]["pilot_return.png"] = pilot_frame
             if self.display_readback_validation_enabled:
                 self.pilot_display.imageSave(
                     None,
@@ -1960,8 +1986,8 @@ class DreamModeController(Supervisor):
 
     def _write_display_frame(
         self,
-        live_frame: bytes,
-        live_frame_sha256: str,
+        pilot_frame: bytes,
+        hidden_frame_sha256: str,
     ) -> None:
         if self.display_frames is None or self.display_frames_file is None:
             return
@@ -1969,7 +1995,7 @@ class DreamModeController(Supervisor):
         sim_time = self.getTime()
         mode = self.outage_runtime.mode
         current = self.outage_runtime.current
-        rendered, source_type = self.pilot_frame_selector.select(mode, live_frame)
+        rendered, source_type = self.pilot_frame_selector.select(mode, pilot_frame)
         rendered_sha256 = hashlib.sha256(rendered).hexdigest()
         if mode == "normal":
             source_frame_id = self.pilot_frame_id
@@ -1978,7 +2004,7 @@ class DreamModeController(Supervisor):
             anchor_sha256 = ""
             self.last_pilot_live_frame_id = self.pilot_frame_id
             self.last_pilot_live_frame_time = sim_time
-            self.last_pilot_live_frame = bytes(bytearray(live_frame))
+            self.last_pilot_live_frame = bytes(bytearray(pilot_frame))
         elif mode == "frozen" and source_type == "anchor":
             source_frame_id = self.outage_anchor_frame_id
             source_time = self.outage_anchor_frame_time
@@ -2011,9 +2037,9 @@ class DreamModeController(Supervisor):
                 "source_age_ms": source_age_ms,
                 "anchor_sha256": anchor_sha256,
                 "rendered_sha256": rendered_sha256,
-                "hidden_ground_truth_sha256": live_frame_sha256,
+                "hidden_ground_truth_sha256": hidden_frame_sha256,
                 "render_differs_from_ground_truth": int(
-                    rendered_sha256 != live_frame_sha256
+                    rendered_sha256 != hidden_frame_sha256
                 ),
                 "schedule_sha256": self.outage_schedule["schedule_sha256"],
             }
@@ -2033,22 +2059,26 @@ class DreamModeController(Supervisor):
             % (self.CAMERA_PERIOD_MS // self.time_step)
             == 0
         )
-        live_frame = None
-        live_frame_sha256 = None
+        hidden_frame = None
+        hidden_frame_sha256 = None
+        pilot_frame = None
+        pilot_frame_sha256 = None
         if on_display_frame and self.getTime() + 1e-9 >= self.CAMERA_PERIOD_MS / 1000.0:
-            live_frame = bytes(self.camera.getImage())
-            live_frame_sha256 = hashlib.sha256(live_frame).hexdigest()
+            hidden_frame = bytes(self.camera.getImage())
+            hidden_frame_sha256 = hashlib.sha256(hidden_frame).hexdigest()
+            pilot_frame = bytes(self.pilot_camera.getImage())
+            pilot_frame_sha256 = hashlib.sha256(pilot_frame).hexdigest()
 
         # This is the frame that was visible during the Webots step that just
         # completed. Display commands below take effect on the following step,
         # so logging it before transitions aligns evidence with pilot exposure.
         if (
             on_display_frame
-            and live_frame is not None
-            and live_frame_sha256 is not None
+            and pilot_frame is not None
+            and hidden_frame_sha256 is not None
             and self.display_frame_logging_enabled
         ):
-            self._write_display_frame(live_frame, live_frame_sha256)
+            self._write_display_frame(pilot_frame, hidden_frame_sha256)
 
         self._capture_due_pilot_returns()
 
@@ -2065,8 +2095,9 @@ class DreamModeController(Supervisor):
             if transition["type"] == "start":
                 self._begin_outage(
                     transition["event"],
-                    live_frame,
-                    live_frame_sha256,
+                    hidden_frame,
+                    pilot_frame,
+                    pilot_frame_sha256,
                 )
             elif transition["type"] == "end":
                 self._finish_outage(transition["event"])
