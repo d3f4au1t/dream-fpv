@@ -1,0 +1,152 @@
+{
+  "schema_version": 1,
+  "validation_status": "passed",
+  "recorded_at_utc": "2026-09-19T02:42:11Z",
+  "repository": "https://github.com/d3f4au1t/dream-fpv",
+  "evidence_basis": "Direct Phase 2.3.0 static, unit, dual-mode startup, dual-mode physical-display outage, dual-mode visual, and complete single-session flight-dynamics acceptance.",
+  "apparatus": {
+    "id": "dream_fpv_webots",
+    "version": "2.3.0",
+    "manifest_sha256": "51964ae91c994989ac022f69c585eeec446fdf7f681969a2c2efc9c42aebfac9",
+    "controller_config_sha256": "0d689e09986e5b328d081f515b9a400932cd2084ac21d1baf0331d30ddbf9424",
+    "controller_source_sha256": "e1b9e7b255eec8bae3fde479aa0459171837353e0ec5168c8a21d00cfc426785",
+    "world_sha256": "5e8a0f32a1d0f59a502c29e1da3486c582c458e7daef29b9e68b3fbd3b0a0015"
+  },
+  "validated_source": {
+    "git_commit": "135b6f633bcd82fe123a90857754c851541594cb",
+    "git_dirty": false,
+    "note": "This commit contains the DJI O4 and healthy NTSC/CVBS visual reference profiles, removal of decorative analog damage, deterministic digital outage-screen parking, and updated acceptance semantics. The validation-record commit adds only documentation and evidence."
+  },
+  "reference_profiles": {
+    "digital": {
+      "air_unit": "DJI O4 Air Unit (standard, non-Pro)",
+      "goggles": "DJI Goggles 3",
+      "mode": "Racing Mode",
+      "published_live_view": "1080p/100fps H.265",
+      "published_lens_fov_deg": 117.6,
+      "published_minimum_latency_ms": 20,
+      "official_reference": "https://www.dji.com/o4-air-unit/specs"
+    },
+    "analog": {
+      "camera": "Foxeer Nano Predator 5",
+      "signal": "NTSC CVBS, switchable 16:9, good-link baseline",
+      "published_horizontal_resolution": "1000TVL",
+      "published_horizontal_fov_deg": 125.0,
+      "published_camera_latency_ms": 4,
+      "receiver": "modern adaptive-comb, deinterlaced and upscaled analog goggle receiver",
+      "camera_reference": "https://www.foxeer.com/foxeer-nano-predator-5-racing-camera-4ms-latency-super-wdr-g-305",
+      "receiver_reference": "https://docs.hd-zero.com/goggles-operation"
+    }
+  },
+  "environment": {
+    "webots_tested_version": "R2025a",
+    "webots_actual_version": "R2025a",
+    "python_version": "3.12.4",
+    "platform": "macOS 26.3 (25D125)"
+  },
+  "checks": {
+    "apparatus_verifier": {
+      "passed": true,
+      "command": "./scripts/verify_apparatus.py",
+      "locked_file_count": 13,
+      "course_zone_count": 10,
+      "manifest_sha256": "51964ae91c994989ac022f69c585eeec446fdf7f681969a2c2efc9c42aebfac9"
+    },
+    "unit_tests": {
+      "passed": true,
+      "command": "python3 -m unittest discover -s tests -v",
+      "test_count": 99,
+      "failure_count": 0
+    },
+    "startup_smoke": {
+      "passed": true,
+      "commands": [
+        "./scripts/smoke_test.sh",
+        "DREAM_MODE_VIDEO_STYLE=analog ./scripts/smoke_test.sh"
+      ],
+      "video_styles": ["digital", "analog"],
+      "telemetry_data_rows_per_run": 161
+    },
+    "outage_baseline_acceptance": {
+      "passed": true,
+      "commands": [
+        "./scripts/outage_baseline_test.py",
+        "DREAM_MODE_VIDEO_STYLE=analog ./scripts/outage_baseline_test.py"
+      ],
+      "video_styles": {
+        "digital": {
+          "replay_count": 2,
+          "events_per_replay": 10,
+          "max_onset_processing_ms": 4.107
+        },
+        "analog": {
+          "replay_count": 2,
+          "events_per_replay": 10,
+          "max_observed_onset_processing_ms": 4.012
+        }
+      },
+      "conditions": ["black", "frozen"],
+      "requested_durations_ms": [100, 250, 500, 750, 1000],
+      "aborted_event_count": 0,
+      "pending_event_count": 0,
+      "display_period_ms": 16,
+      "physical_display_readback_verified": true
+    },
+    "live_visual_acceptance": {
+      "passed": true,
+      "existing_webots_window_reloaded": true,
+      "digital": {
+        "reference": "DJI O4 Air Unit and Goggles 3 Racing Mode",
+        "clean_full_frame_view": true,
+        "lens_fov_deg": 117.6,
+        "duplicate_camera_overlay_absent": true,
+        "physical_outage_surface_absent_during_live_view": true
+      },
+      "analog": {
+        "reference": "Foxeer Predator 5 good-link NTSC/CVBS through a modern deinterlaced receiver",
+        "source_artifacts_inspected": true,
+        "stable_good_link_image": true,
+        "fixed_decorative_scanlines_absent": true,
+        "fixed_sync_bands_absent": true,
+        "restrained_noise_and_motion_response": true
+      }
+    },
+    "flight_dynamics_acceptance": {
+      "passed": true,
+      "command": "./scripts/flight_dynamics_test.py",
+      "execution_mode": "single_webots_session",
+      "webots_session_count": 1,
+      "world_reload_count": 71,
+      "generated_at_utc": "2026-09-19T02:42:01.384694+00:00",
+      "scenario_count": 72,
+      "completed_scenario_count": 72,
+      "failed_check_count": 0,
+      "run_manifest_count": 72,
+      "run_fingerprint_count": 72,
+      "unique_run_fingerprint_count": 70,
+      "determinism_replay_fingerprint_sha256": "c67ffb3c077e1f17338a5dd4a82d05242322a361bb6c93b250aa1c5e9382754b",
+      "report_sha256": "5b9dd7d5968a097e49035f2208ef8a93747efe2efe534d3dabbb69475683f961"
+    }
+  },
+  "release_qualification": {
+    "phase_2_outage_baseline_complete": true,
+    "phase_2_flight_dynamics_rerun_complete": true,
+    "hardware_referenced_digital_profile_complete": true,
+    "hardware_referenced_analog_profile_complete": true,
+    "single_window_regression_runner_available": true,
+    "flight_model_changed_from_phase_1": false,
+    "course_changed_from_phase_1": false
+  },
+  "scope_boundary": {
+    "software_apparatus_phase_2_complete": true,
+    "public_hardware_specifications_mapped": true,
+    "captured_goggles_dvr_calibration_complete": false,
+    "through_the_lens_optical_calibration_complete": false,
+    "proprietary_codec_emulated": false,
+    "rf_link_emulated": false,
+    "predictive_display_implemented": false,
+    "uncertainty_model_implemented": false,
+    "physical_digital_twin_validated": false,
+    "formal_participant_trials_ready": false
+  }
+}

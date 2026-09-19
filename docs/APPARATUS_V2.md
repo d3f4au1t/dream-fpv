@@ -1,4 +1,4 @@
-# Dream FPV Experimental Apparatus v2.2.0
+# Dream FPV Experimental Apparatus v2.3.0
 
 Status: **frozen** on 2026-09-18.
 
@@ -29,21 +29,25 @@ Git tag. A digest must not be updated only to silence a failed integrity check.
 ## Pilot-view path
 
 The apparatus provides `digital` and `analog` pilot styles. `digital` is the
-default. Its uninterrupted view is the original mounted Webots `Viewpoint`, so
-normal flight retains the clean full-frame simulator viewport rather than a
-camera texture or inset device overlay. At outage onset the controller makes
-the physical display opaque; at recovery it restores the direct viewpoint.
+default and references the standard DJI O4 Air Unit with DJI Goggles 3 in
+Racing Mode. The mounted Webots `Viewpoint` uses the O4 camera's published
+117.6° lens geometry and provides a clean Normal-color full-frame presentation
+without an inset device overlay. At outage onset the controller restores the
+physical display to its calibrated position; at recovery it parks that surface
+behind the camera and returns to the direct viewpoint.
 
-The analog style continuously routes a dedicated 480 × 270 pilot camera through
-the Webots `Display`. It applies sensor noise, 24 ms motion persistence,
-highlight bloom, mild barrel distortion, scanlines, and two faint horizontal
-sync bands. The textured screen keeps a 16:9 shape but extends beyond every
-viewport edge, preventing the brighter live 3D scene from appearing around it.
+The analog style references a Foxeer Nano Predator 5 in its switchable 16:9
+NTSC/CVBS mode, presented through a modern adaptive-comb, deinterlaced and
+upscaled goggle receiver. Its dedicated 480 × 270 camera uses the published
+125° horizontal view, restrained good-link noise, 4 ms motion response, Super
+WDR-like exposure and mild lens distortion. Fixed scanlines, sync bands, bloom
+and heavy motion persistence were removed because they made a healthy link look
+like damaged VHS rather than modern analog FPV.
 
-The clean research camera and both pilot cameras use a 16 ms sampling period,
-120° horizontal field of view, and 22° uptilt. The research RGB and depth paths
-remain separate hidden ground truth. Outage commands affect only the pilot
-presentation, not the aircraft dynamics.
+The clean research camera remains at the frozen Phase 1 geometry. Both pilot
+cameras retain the same 22° uptilt and 16 ms simulator sampling period. The
+research RGB and depth paths remain separate hidden ground truth. Outage
+commands affect only the pilot presentation, not the aircraft dynamics.
 
 During an outage:
 
@@ -181,8 +185,8 @@ Each completed per-event directory contains:
 - `pilot_anchor.png`, `pilot_mid.png`, `pilot_last.png`, and
   `pilot_return.png`, representing the physical pilot output across the
   transition;
-- `pilot_source_anchor.png`, preserving the degraded pilot-camera source before
-  the display-layer scanlines and sync bands are composited.
+- `pilot_source_anchor.png`, preserving the selected pilot-camera source before
+  any black or frozen outage-state replacement is applied.
 
 Sensor buffers are copied in memory at their experimental timestamps. Routine
 PNG compression and disk writes are deferred until the flight has finished so
@@ -226,8 +230,8 @@ python3 -m unittest discover -s tests -v
 ```
 
 The signed-off result is stored in
-`validation/apparatus-v2.2.0.json` and the validated source is tagged
-`apparatus-v2.2.0`.
+`validation/apparatus-v2.3.0.json` and the validated source is tagged
+`apparatus-v2.3.0`.
 
 The flight-dynamics runner uses one hidden Webots process for the complete
 72-scenario suite. It reloads the frozen world between isolated scenarios,
@@ -241,11 +245,15 @@ multi-process behavior remains available only for diagnosis with
 - The outage emulator changes only the rendered pilot view. It does not model
   packet loss, RF propagation, encoding, buffering, decoder concealment,
   compression artifacts, link recovery, or display hardware latency.
-- The analog-style pilot feed is a visual treatment. Its noise, persistence,
-  bloom, distortion and line artifacts have not been calibrated against a
-  physical camera, VTX, receiver or goggle display.
-- The digital pilot feed is the clean simulator viewport path. It has not been
-  calibrated as a model of a digital air unit, codec, RF link or headset.
+- The digital geometry and display target use DJI's published O4 Air Unit and
+  Goggles 3 Racing Mode specifications. Webots does not reproduce DJI's
+  proprietary H.265 encoder, adaptive bitrate, RF behavior or goggle optics.
+- The analog camera geometry, signal standard and healthy-feed target use
+  Foxeer and modern receiver specifications. The simulator does not reproduce
+  a measured VTX, multipath, interference, receiver AGC or goggle optics.
+- Neither profile has been calibrated against a captured goggles DVR sequence
+  or a through-the-lens measurement, so “exactly identical to hardware” remains
+  outside the evidence boundary.
 - Phase 2 contains no predicted imagery, optical-flow extrapolation, learned
   model, uncertainty estimate, or safety cue.
 - The physical coefficients remain simulator-tuned rather than identified from
@@ -268,5 +276,5 @@ multi-process behavior remains available only for diagnosis with
   scenarios pass.
 - Two end-to-end outage replays pass every duration in both conditions with
   exact timing, valid artifacts, and no aborted or pending events.
-- The validation summary and `apparatus-v2.2.0` Git tag identify the frozen
+- The validation summary and `apparatus-v2.3.0` Git tag identify the frozen
   source used for the apparatus.

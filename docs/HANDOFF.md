@@ -85,15 +85,15 @@ Never discard unrelated user changes. Avoid destructive Git commands.
 - Phase 2 baseline source commit: `02237d1cda893bd5bd408e6b174a146e9a2a4277`
 - Phase 2.0.1 single-session validation source commit:
   `ee2eac8e967784e686bb403d29d363a337b1cc2f`
-- Phase 2.2.0 validated source commit:
-  `7ccce8d274fa9866c71b0bb1830336e70a97ad00`
-- Current Phase 2 tag: `apparatus-v2.2.0` (annotated and pushed)
-- Current Phase 2 validation record: `validation/apparatus-v2.2.0.json`
+- Phase 2.3.0 validated source commit:
+  `135b6f633bcd82fe123a90857754c851541594cb`
+- Current Phase 2 tag: `apparatus-v2.3.0` (annotated and pushed)
+- Current Phase 2 validation record: `validation/apparatus-v2.3.0.json`
 - Historical qualified Phase 2 tags and records: `apparatus-v2.0.0` /
   `validation/apparatus-v2.0.0.json` and `apparatus-v2.0.1` /
   `validation/apparatus-v2.0.1.json`
 - Phase 2 apparatus manifest digest:
-  `17924033ed85b1e1ffccb34dd0789edb2ce0e615f3c1d2f13559975ec5229aa7`
+  `51964ae91c994989ac022f69c585eeec446fdf7f681969a2c2efc9c42aebfac9`
 - Phase 2 controller-configuration digest:
   `0d689e09986e5b328d081f515b9a400932cd2084ac21d1baf0331d30ddbf9424`
 
@@ -106,12 +106,12 @@ Process IDs are transient; recheck with:
 pgrep -fal '^/Applications/Webots.app/Contents/MacOS/webots'
 ```
 
-The Phase 2 source and release bookkeeping are complete. Version 2.2.0 makes a
-clean, full-frame version of the original mounted Webots viewport the default
-digital pilot view. Analog remains selectable and retains its separate camera,
-signal-style treatment, and overscanned physical display. Both modes passed
-startup and two-replay outage acceptance, and the complete regression passed
-72/72 scenarios with zero failed checks.
+The Phase 2 source and release bookkeeping are complete. Version 2.3.0 maps the
+default digital view to the standard DJI O4 Air Unit and Goggles 3 Racing Mode,
+including its 117.6° optics and clean Normal-color presentation. Analog maps to
+a good-link Foxeer Predator 5 NTSC/CVBS feed through a modern deinterlaced
+receiver. Both modes passed startup and two-replay outage acceptance, and the
+complete regression passed 72/72 scenarios with zero failed checks.
 
 ## 4. Frozen Phase 1 apparatus
 
@@ -162,18 +162,17 @@ Phase 2 implements a reproducible link-loss experiment without prediction.
 
 ### Pilot display path
 
-Digital is the default. Its uninterrupted view is the original mounted Webots
-`Viewpoint`, filling the entire scene without a low-resolution camera texture
-or duplicate overlay pane. During an outage the controller temporarily exposes
-the physical display, then returns to the direct viewpoint on recovery.
+Digital is the default. Its uninterrupted mounted `Viewpoint` uses the standard
+DJI O4 Air Unit's 117.6° camera geometry and stays clean, full-frame and free of
+duplicate overlays. The physical outage screen is parked behind the camera
+during healthy flight, restored at outage onset, and parked again on recovery.
 
-Analog remains selectable. It continuously routes the dedicated 480 × 270
-analog-style camera through the overscanned 16:9 physical display and adds
-noise, 24 ms motion persistence, highlight bloom, mild barrel distortion,
-scanlines and faint sync bands. The clean research camera remains pristine
-hidden ground truth in both modes. The physical display is hidden from the
-research, pilot-camera and depth sensors with `setVisibility`, preventing
-feedback while preserving ground truth.
+Analog remains selectable. It continuously routes a 480 × 270 good-link
+Foxeer Predator 5 NTSC/CVBS reference through the overscanned 16:9 physical
+display. It uses a 125° horizontal view, restrained noise, 4 ms camera response,
+Super WDR-like exposure and mild lens character. Permanent decorative
+scanlines, sync bars, excessive bloom and 24 ms smear were removed. The clean
+research camera remains pristine hidden ground truth in both modes.
 
 ### Conditions
 
@@ -317,7 +316,7 @@ be used without the user's explicit direction.
 
 ## 8. Verified results
 
-The following checks were completed against the Phase 2.2.0 locked files:
+The following checks were completed against the Phase 2.3.0 locked files:
 
 - static verifier: passed; 13 locked files and 10 course zones;
 - unit tests: 99 passed, zero failures;
@@ -326,26 +325,25 @@ The following checks were completed against the Phase 2.2.0 locked files:
   ten events per replay, every required duration in black and frozen
   conditions, no aborts, exact frame intervals, valid artifacts, and return to
   live video;
-- maximum onset work was 3.981 ms in digital and 3.836 ms in analog, both below
+- maximum onset work was 4.107 ms in digital and 4.012 ms in analog, both below
   the 16 ms display period;
-- live visual acceptance: digital matched the clean original mounted viewport,
-  filled the entire scene, and showed no duplicate diagnostic pane;
-- analog retained the viewport-coverage and style acceptance recorded for
-  Version 2.1.0;
-- Phase 2.2.0 flight dynamics: 72/72 passed with zero failed checks in one
+- live visual acceptance: digital retained a clean O4-FOV mounted viewport with
+  no duplicate pane; analog acceptance artifacts showed a stable, restrained
+  good-link NTSC image without decorative damage;
+- Phase 2.3.0 flight dynamics: 72/72 passed with zero failed checks in one
   Webots session; the two determinism replay fingerprints matched.
 
-## 9. Phase 2.2.0 release completion
+## 9. Phase 2.3.0 release completion
 
-- `validation/apparatus-v2.2.0.json` records direct static, unit, dual-mode
-  startup/outage, live digital visual and complete 72-scenario evidence.
-- Commit `7ccce8d274fa9866c71b0bb1830336e70a97ad00` is the clean validated source.
-- Annotated tag `apparatus-v2.2.0` points to the commit containing this record
+- `validation/apparatus-v2.3.0.json` records direct static, unit, dual-mode
+  startup/outage, dual-mode visual and complete 72-scenario evidence.
+- Commit `135b6f633bcd82fe123a90857754c851541594cb` is the clean validated source.
+- Annotated tag `apparatus-v2.3.0` points to the commit containing this record
   and is pushed to `origin`.
 - The existing Webots window was left open in default digital mode.
 
-The older Phase 2 records remain as historical evidence. Version 2.2.0
-supersedes them for the selectable digital-default and analog pilot paths.
+The older Phase 2 records remain as historical evidence. Version 2.3.0
+supersedes them for the hardware-referenced pilot-view profiles.
 
 ## 10. Known limits and research boundaries
 
@@ -353,10 +351,11 @@ supersedes them for the selectable digital-default and analog pilot paths.
   imagery or uncertainty model.
 - The emulator does not model RF propagation, packet loss, codec buffering,
   decoder concealment, compression damage or hardware display latency.
-- The analog-style feed is visual rather than physically calibrated; it must
-  not be presented as a measured model of a camera/VTX/receiver/goggle chain.
-- The digital feed is the clean simulator viewport path, not a calibrated model
-  of a digital air unit, codec, RF link or headset.
+- The visual targets use public DJI O4, Foxeer Predator 5 and modern receiver
+  specifications, but do not emulate proprietary codecs, adaptive bitrate, RF
+  propagation, VTX/receiver behavior or measured goggle optics.
+- Exact physical matching still requires captured goggles DVR and preferably a
+  through-the-lens calibration sequence from the intended hardware chain.
 - Spatial-zone entry labels trigger locations but does not prove a correct gate
   crossing direction.
 - Direct HID support is decoder- and calibration-specific. Unknown controllers

@@ -2,7 +2,7 @@
 
 Dream FPV is a Webots-based FPV research simulator for controlled video-loss experiments. It includes an acro quad model, a technical practice course, a camera-backed pilot view, synchronized RGB/depth capture, external-controller input, recovery logic, and timestamped telemetry.
 
-The frozen Phase 1 flight baseline is tagged `apparatus-v1.0.0`. Phase 2 keeps that flight model and course unchanged and adds reproducible black-screen and frozen-frame outage baselines. The current Phase 2 apparatus version is `2.2.0`. See the [Phase 1 apparatus record](docs/APPARATUS_V1.md), [Phase 2 apparatus record](docs/APPARATUS_V2.md), [project handoff](docs/HANDOFF.md), and the corresponding validation summaries under [`validation/`](validation/).
+The frozen Phase 1 flight baseline is tagged `apparatus-v1.0.0`. Phase 2 keeps that flight model and course unchanged and adds reproducible black-screen and frozen-frame outage baselines. The current Phase 2 apparatus version is `2.3.0`. See the [Phase 1 apparatus record](docs/APPARATUS_V1.md), [Phase 2 apparatus record](docs/APPARATUS_V2.md), [project handoff](docs/HANDOFF.md), and the corresponding validation summaries under [`validation/`](validation/).
 
 This is an experimental software apparatus, not a validated digital twin of a physical aircraft.
 
@@ -43,7 +43,9 @@ Start the simulator:
 
 You can also open `worlds/dream_mode_research.wbt` from Webots.
 
-Digital is the default pilot mode. Its live view is the original mounted Webots viewport: full-frame, clean, and free of an inset camera pane. During an outage it switches to the physical display so black and frozen-frame conditions remain measurable. Analog mode uses a separate 480 × 270 pilot camera with noise, motion persistence, highlight bloom, mild lens distortion, scanlines, and sync bands. Both pilot paths retain the same 120° horizontal field of view and 22° uptilt, and neither contaminates hidden RGB-D ground truth. The analog treatment is visual, not a calibrated model of a physical VTX or RF link.
+Digital is the default pilot mode. It references the standard DJI O4 Air Unit with DJI Goggles 3 in Racing Mode: a clean full-frame view, 117.6° lens geometry, Normal color, and no inset camera pane. The simulator uses the mounted Webots viewport for healthy digital video and exposes the physical display only during black or frozen outages. The proprietary H.265 encoder, adaptive bitrate and RF link are not reproduced.
+
+Analog references a good-signal Foxeer Nano Predator 5 NTSC/CVBS camera in 16:9 through a modern deinterlaced receiver. Its 125° view is softer and lower-bandwidth than digital, with restrained sensor noise, four-millisecond camera motion response and mild lens character. It deliberately has no permanent scanlines, colored sync bars or exaggerated VHS damage; those are not present on a healthy modern analog link. Neither pilot path contaminates hidden RGB-D ground truth.
 
 Select the optional analog view explicitly:
 
@@ -232,7 +234,7 @@ worlds/dream_mode_research.wbt  course and simulator world
 ## Known limitations
 
 - The physical coefficients have not been identified from measured airframe data.
-- Phase 2 supports controlled black and frozen frames, not continuous encoded-video capture, packet loss, RF propagation, decoder behavior, or latency/jitter emulation. Digital mode is the clean simulator viewport path, not a calibrated digital-air-unit model; analog mode is an uncalibrated visual treatment.
+- Phase 2 supports controlled black and frozen frames, not continuous encoded-video capture, packet loss, RF propagation, decoder behavior, or latency/jitter emulation. The visual profiles are grounded in public DJI O4, Foxeer Predator 5 and modern analog-receiver specifications, but have not been calibrated against captured goggle DVR or optical measurements.
 - Predictive display rendering and uncertainty cues are not implemented.
 - The direct-HID adapter requires a validated identity, decoder, and calibration profile for each controller model; arbitrary devices are not mapped automatically.
 - The launcher and end-to-end validation scripts are macOS-specific.
