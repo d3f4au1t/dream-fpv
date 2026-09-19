@@ -18,7 +18,8 @@ DEF WORLD_INFO WorldInfo {
   }
 }
 DEF FPV_VIEW Viewpoint {
-  fieldOfView 2.0943951
+  # DJI O4 Air Unit standard-camera reference: 117.6 degree FOV.
+  fieldOfView 2.052507200345331
   orientation 0 1 0 -0.3839724354387525
   position -6.935 0 0.05
   near 0.05
@@ -809,13 +810,13 @@ FpvResearchQuad {
       height 270
       near 0.05
     }
-    # The digital pilot path is the clean default. It remains separate from
-    # the research camera so display experiments cannot alter ground truth.
+    # DJI O4 Air Unit / Goggles 3 Racing Mode visual reference. The live
+    # Viewpoint uses the same FOV; this camera preserves outage anchors.
     Camera {
       translation 0.065 0 0.02
       rotation 0 1 0 -0.3839724354387525
       name "pilot digital camera"
-      fieldOfView 2.0943951
+      fieldOfView 2.052507200345331
       width 480
       height 270
       near 0.05
@@ -825,23 +826,24 @@ FpvResearchQuad {
       motionBlur 0
       noise 0
     }
-    # Optional analog-style path. The research camera above remains pristine
-    # so visual degradation never contaminates hidden ground truth.
+    # Good-link Foxeer Predator 5 NTSC/CVBS reference through a modern
+    # deinterlaced receiver. Link breakup is an experimental condition, not a
+    # permanent VHS-style overlay on the healthy feed.
     Camera {
       translation 0.065 0 0.02
       rotation 0 1 0 -0.3839724354387525
       name "pilot analog camera"
-      fieldOfView 2.0943951
+      fieldOfView 2.181661564992912
       width 480
       height 270
       near 0.05
-      exposure 1.2
-      antiAliasing FALSE
-      bloomThreshold 0.7
-      motionBlur 24
-      noise 0.055
+      exposure 1.05
+      antiAliasing TRUE
+      bloomThreshold -1
+      motionBlur 4
+      noise 0.006
       lens Lens {
-        radialCoefficients -0.08 0.02
+        radialCoefficients -0.035 0.008
       }
     }
     Display {

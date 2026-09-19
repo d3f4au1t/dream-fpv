@@ -282,6 +282,7 @@ class WorldLayoutTests(unittest.TestCase):
         self.assertIn("position -6.935 0 0.05", self.world)
         self.assertIn("near 0.05", self.world)
         self.assertIn("far 0.052", self.world)
+        self.assertIn("fieldOfView 2.052507200345331", self.world)
         self.assertEqual(self.world.count("translation 0.065 0 0.02"), 4)
         self.assertEqual(self.world.count("rotation 0 1 0 -0.3839724354387525"), 5)
 
@@ -334,14 +335,18 @@ class WorldLayoutTests(unittest.TestCase):
         self.assertIn("bloomThreshold -1", digital)
         self.assertIn("motionBlur 0", digital)
         self.assertIn("noise 0", digital)
+        self.assertIn("fieldOfView 2.052507200345331", digital)
         pilot = self.world.split('name "pilot analog camera"', 1)[1].split(
             "Display {", 1
         )[0]
-        self.assertIn("exposure 1.2", pilot)
-        self.assertIn("bloomThreshold 0.7", pilot)
-        self.assertIn("motionBlur 24", pilot)
-        self.assertIn("noise 0.055", pilot)
-        self.assertIn("radialCoefficients -0.08 0.02", pilot)
+        self.assertIn("fieldOfView 2.181661564992912", pilot)
+        self.assertIn("exposure 1.05", pilot)
+        self.assertIn("antiAliasing TRUE", pilot)
+        self.assertIn("bloomThreshold -1", pilot)
+        self.assertIn("motionBlur 4", pilot)
+        self.assertIn("noise 0.006", pilot)
+        self.assertIn("radialCoefficients -0.035 0.008", pilot)
+        self.assertNotIn("sync band", self.world.lower())
 
     def test_all_course_sections_are_present(self):
         for name in (

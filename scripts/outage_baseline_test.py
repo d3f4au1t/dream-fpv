@@ -557,8 +557,8 @@ def validate_artifacts(run_dir: Path, expected_script: list[dict]) -> dict:
                 f"{event_id} analog pilot source is not visually degraded",
             )
             require(
-                anchor_rgb != pilot_source_anchor_rgb,
-                f"{event_id} analog display overlay is missing",
+                anchor_rgb == pilot_source_anchor_rgb,
+                f"{event_id} analog display added a nonphysical fixed overlay",
             )
         else:
             require(

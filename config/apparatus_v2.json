@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "apparatus_id": "dream_fpv_webots",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "status": "frozen",
   "frozen_on": "2026-09-18",
   "random_seed": 1907,
@@ -50,7 +50,7 @@
       "digital": {
         "device_name": "pilot digital camera",
         "resolution": [480, 270],
-        "field_of_view_rad": 2.0943951,
+        "field_of_view_rad": 2.052507200345331,
         "translation_m": [0.065, 0.0, 0.02],
         "rotation_axis_angle": [0.0, 1.0, 0.0, -0.3839724354387525],
         "exposure": 1.0,
@@ -59,29 +59,49 @@
         "motion_blur_ms": 0.0,
         "noise": 0.0,
         "display_overlay": false,
+        "reference_profile": {
+          "manufacturer": "DJI",
+          "air_unit": "DJI O4 Air Unit (standard, non-Pro)",
+          "goggles": "DJI Goggles 3",
+          "mode": "Racing Mode",
+          "live_view": "1080p/100fps H.265",
+          "camera_sensor": "1/2-inch CMOS",
+          "lens_fov_deg": 117.6,
+          "minimum_glass_to_glass_latency_ms": 20,
+          "color_mode": "Normal",
+          "official_reference": "https://www.dji.com/o4-air-unit/specs",
+          "simulator_mapping": "clean mounted Viewpoint at the O4 field of view; Webots renders at the host viewport refresh rate and does not emulate the proprietary encoder"
+        },
         "live_view_source": "mounted Webots Viewpoint with the physical screen transparent; the pilot camera supplies outage anchors and physical-display transitions",
-        "model_scope": "clean simulator viewport path; not a calibrated digital air-unit, codec, RF, receiver, or display model"
+        "model_scope": "visual and geometric reference to the standard DJI O4 Air Unit in Goggles 3 Racing Mode; no proprietary H.265 encoder, adaptive bitrate, RF propagation, or measured goggle optics"
       },
       "analog": {
         "device_name": "pilot analog camera",
         "resolution": [480, 270],
-        "field_of_view_rad": 2.0943951,
+        "field_of_view_rad": 2.181661564992912,
         "translation_m": [0.065, 0.0, 0.02],
         "rotation_axis_angle": [0.0, 1.0, 0.0, -0.3839724354387525],
-        "exposure": 1.2,
-        "anti_aliasing": false,
-        "bloom_threshold": 0.7,
-        "motion_blur_ms": 24.0,
-        "noise": 0.055,
-        "radial_distortion_coefficients": [-0.08, 0.02],
-        "display_overlay": {
-          "scanline_spacing_px": 3,
-          "scanline_alpha": 0.09,
-          "sync_band_rows": [90, 180],
-          "sync_band_height_px": 2
+        "exposure": 1.05,
+        "anti_aliasing": true,
+        "bloom_threshold": -1.0,
+        "motion_blur_ms": 4.0,
+        "noise": 0.006,
+        "radial_distortion_coefficients": [-0.035, 0.008],
+        "display_overlay": false,
+        "reference_profile": {
+          "camera": "Foxeer Nano Predator 5",
+          "signal": "NTSC CVBS, 16:9, good-link baseline",
+          "horizontal_resolution": "1000TVL",
+          "horizontal_fov_deg": 125.0,
+          "camera_latency_ms": 4,
+          "receiver_display": "modern adaptive-comb, deinterlaced and upscaled goggle receiver",
+          "receiver_output": "59.97fps NTSC presentation",
+          "camera_reference": "https://www.foxeer.com/foxeer-nano-predator-5-racing-camera-4ms-latency-super-wdr-g-305",
+          "receiver_reference": "https://docs.hd-zero.com/goggles-operation",
+          "simulator_mapping": "stable good-link CVBS image with composite softness, restrained sensor noise and mild lens distortion; no decorative scanlines or fixed sync bands"
         },
         "live_view_source": "physical camera-backed display",
-        "model_scope": "visual analog-style degradation only; not a calibrated RF, transmitter, receiver, or composite-video signal model"
+        "model_scope": "good-link analog camera and modern receiver reference; no measured VTX/RF propagation, multipath, adjacent-channel interference, receiver AGC, or specific goggle optics"
       }
     }
   },
@@ -107,18 +127,18 @@
       "Motor, inertia, drag, propwash, and collision parameters have not been identified from the physical airframe.",
       "The model must not be described as feeling exactly like, or predicting the dynamics of, the physical drone.",
       "Phase 2 validates black and frozen-video interruption baselines, not predictive rendering or real radio-link behavior.",
-      "The analog-style pilot feed is a visual treatment and has not been calibrated against a physical VTX, receiver, camera, or display chain.",
+      "The pilot profiles are anchored to public DJI O4, Foxeer Predator 5, and modern analog-receiver specifications but have not been calibrated against captured goggles DVR or optical measurements.",
       "Each controller model must be calibrated before formal participant trials."
     ]
   },
   "locked_files": {
-    "worlds/dream_mode_research.wbt": "64c8077db3b15bd816ef7142f37a93934d1b014948b67644a9c7287179ab60ae",
+    "worlds/dream_mode_research.wbt": "5e8a0f32a1d0f59a502c29e1da3486c582c458e7daef29b9e68b3fbd3b0a0015",
     "protos/FpvResearchQuad.proto": "d23616a115cc0f40d0426b809c504113ebde4c001cbab9ff34235753291eadfd",
     "config/controller.json": "0d689e09986e5b328d081f515b9a400932cd2084ac21d1baf0331d30ddbf9424",
     "config/course_zones.json": "7f2cb474bf63bea887715bd76294d73fd6ed101b46e82b1289a93e46eb8abea5",
     "config/apex_t19_calibration_v1.json": "065f0d5a55a42a3da875332a835a3238b7876df0aa6480a6470d87498be6630c",
     "config/outage_baselines_v1.json": "a8c421f17a7f2a4fe3c393c32e769a8720d4c902e04143bdbea97b2bab28bc3f",
-    "controllers/dream_mode_controller/dream_mode_controller.py": "b4a05b29369f358729b39482d93ef0a7aaafeccde6838c437941891e8663bc66",
+    "controllers/dream_mode_controller/dream_mode_controller.py": "e1b9e7b255eec8bae3fde479aa0459171837353e0ec5168c8a21d00cfc426785",
     "controllers/dream_mode_controller/input_mapping.py": "cf4d6cbf519f7ae5e1068997875072c27325c8f9305c71c77ec0f239c37f1fbf",
     "controllers/dream_mode_controller/apparatus.py": "0eb99b406b7d1961f9f7b831b31306542c1a2fc059d32f0a899b9ce1fc6c6892",
     "controllers/dream_mode_controller/outage_baselines.py": "6dddb7bb19eb002141522d7dda2d7ae4280a24cba29c86dd782283976c3edbf4",

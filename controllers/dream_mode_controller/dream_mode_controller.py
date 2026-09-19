@@ -273,8 +273,6 @@ class DreamModeController(Supervisor):
             self.pilot_display.getHeight(),
         )
         self.pilot_display.attachCamera(self.pilot_camera)
-        if self.pilot_video_style == "analog":
-            self._draw_analog_overlay()
         self.pilot_frame_selector = PilotFrameSelector(
             self.pilot_camera.getWidth() * self.pilot_camera.getHeight() * 4
         )
@@ -787,6 +785,9 @@ class DreamModeController(Supervisor):
                         else "physical display"
                     ),
                     "source_camera": self.pilot_camera_name,
+                    "reference_profile": self.apparatus["pilot_display"][
+                        "source_cameras"
+                    ][self.pilot_video_style]["reference_profile"],
                     "width": self.pilot_display.getWidth(),
                     "height": self.pilot_display.getHeight(),
                     "period_ms": self.CAMERA_PERIOD_MS,
@@ -1741,30 +1742,23 @@ class DreamModeController(Supervisor):
             self.pilot_display.getHeight(),
         )
 
-    def _draw_analog_overlay(self) -> None:
-        """Add low-opacity line structure without altering research RGB."""
-        width = self.pilot_display.getWidth()
-        height = self.pilot_display.getHeight()
-        self.pilot_display.setOpacity(1.0)
-        self.pilot_display.setColor(0x081018)
-        self.pilot_display.setAlpha(0.09)
-        for y in range(2, height, 3):
-            self.pilot_display.drawLine(0, y, width - 1, y)
-        # Two faint, differently tinted sync bands break up the perfectly
-        # uniform digital raster while remaining unobtrusive during flight.
-        self.pilot_display.setColor(0x27445C)
-        self.pilot_display.setAlpha(0.055)
-        self.pilot_display.fillRectangle(0, height // 3, width, 2)
-        self.pilot_display.setColor(0x5A3046)
-        self.pilot_display.setAlpha(0.045)
-        self.pilot_display.fillRectangle(0, (2 * height) // 3, width, 2)
-
     def _set_digital_direct_view(self, enabled: bool) -> None:
-        """Use the mounted 3D Viewpoint for clean digital live video."""
+        """Use the O4-FOV mounted Viewpoint for the clean digital live view."""
         if self.pilot_video_style != "digital":
             return
         if self.viewpoint_node is None:
             raise RuntimeError("Digital pilot view requires the mounted Viewpoint")
+        display_translation = list(
+            self.apparatus["pilot_display"]["translation_m"]
+        )
+        if enabled:
+            # Webots does not consistently apply per-Viewpoint visibility to a
+            # Display texture. Park the outage surface behind the mounted
+            # camera so the clean live view cannot sample its backing texture.
+            display_translation[0] = -1.0
+        self.pilot_display_node.getField("translation").setSFVec3f(
+            display_translation
+        )
         self.pilot_display_appearance_node.getField("transparency").setSFFloat(
             1.0 if enabled else 0.0
         )
@@ -1776,9 +1770,7 @@ class DreamModeController(Supervisor):
     def _restore_live_pilot_display(self) -> None:
         self._clear_pilot_display_layer()
         self.pilot_display.attachCamera(self.pilot_camera)
-        if self.pilot_video_style == "analog":
-            self._draw_analog_overlay()
-        else:
+        if self.pilot_video_style == "digital":
             self._set_digital_direct_view(True)
         if self.outage_display_image is not None:
             self.pilot_display.imageDelete(self.outage_display_image)
