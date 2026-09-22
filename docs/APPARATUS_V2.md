@@ -1,6 +1,6 @@
 # Dream FPV Experimental Apparatus v2.4.0
 
-Status: source frozen on 2026-09-22; release acceptance pending.
+Status: **frozen** on 2026-09-22; release acceptance passed.
 
 Version 2 adds reproducible pilot-video interruption baselines to the Phase 1
 flight apparatus. It is intended for controlled simulator experiments that
@@ -256,6 +256,8 @@ python3 -m unittest discover -s tests -v
 ```
 
 The previous signed-off result remains in `validation/apparatus-v2.3.0.json`.
+The current result is `validation/apparatus-v2.4.0.json`, with source commit
+`811b38577fdb2f99fcf7bd1844cd58d5a8920ebd` and release tag `apparatus-v2.4.0`.
 Version 2.4.0 adds dual-style manual acceptance through the real keyboard-edge
 handler using bounded test-only held-key samples. It verifies all three durations,
 presses while busy, held keys past restoration, physical display contents,

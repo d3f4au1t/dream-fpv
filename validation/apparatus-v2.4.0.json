@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "validation_status": "passed",
+  "recorded_at_utc": "2026-09-22T12:17:28Z",
+  "repository": "https://github.com/d3f4au1t/dream-fpv",
+  "apparatus": {
+    "id": "dream_fpv_webots",
+    "version": "2.4.0",
+    "manifest_sha256": "4cf91102926e7896a97d07bc98b8450b713fb1d88e34d35692a268a7f4d81cda",
+    "controller_source_sha256": "6779ff4c2bf151fb73a60ec18f87e46dda6b5afa868528759bb93e5799324979"
+  },
+  "validated_source": {
+    "git_commit": "811b38577fdb2f99fcf7bd1844cd58d5a8920ebd",
+    "git_dirty": false,
+    "note": "Manual 1/2/3 outage keys, edge debouncing, busy-request rejection, recovery cancellation and manual acceptance. The release commit adds only documentation and evidence."
+  },
+  "environment": {"webots_actual_version": "R2025a", "python_version": "3.12.4"},
+  "checks": {
+    "apparatus_verifier": {"passed": true, "locked_file_count": 13, "course_zone_count": 10},
+    "unit_tests": {"passed": true, "test_count": 112, "manual_outage_test_count": 13, "failure_count": 0},
+    "startup_smoke": {
+      "passed": true, "video_styles": ["digital", "analog"],
+      "telemetry_data_rows_per_run": 161, "default_outage_mode": "manual", "unrequested_outage_count": 0
+    },
+    "manual_outage_acceptance": {
+      "passed": true,
+      "command": "DREAM_MODE_KEEP_OUTAGE_TEST=1 DREAM_MODE_RENDER_VIEWPOINT_TEST=1 ./scripts/outage_baseline_test.py --manual",
+      "analog_override": "DREAM_MODE_VIDEO_STYLE=analog",
+      "video_styles": {
+        "digital": {"replay_count": 2, "events_per_replay": 3, "max_onset_processing_ms": 2.536},
+        "analog": {"replay_count": 2, "events_per_replay": 3, "max_onset_processing_ms": 1.968}
+      },
+      "key_durations_ms": {"1": 250, "2": 500, "3": 1000},
+      "effective_durations_ms": [256, 512, 1008],
+      "held_keys_past_restoration_do_not_repeat": true,
+      "busy_key_does_not_queue_or_extend": true,
+      "hidden_ground_truth_continues": true,
+      "physical_display_readback_verified": true,
+      "exact_frame_intervals_and_live_return_verified": true,
+      "rendered_viewpoint_samples_inspected": true,
+      "os_keyboard_delivery_tested": false,
+      "test_input_scope": "Bounded held-key samples merged into the real controller keyboard edge handler; no OS keystrokes or foreground activation.",
+      "local_artifact_roots": [
+        "/var/folders/zx/9t0m21wx51gdwwtt_5xx84vm0000gn/T/dream-mode-outage-test.jif0fmdg",
+        "/var/folders/zx/9t0m21wx51gdwwtt_5xx84vm0000gn/T/dream-mode-outage-test.mxikbilh"
+      ]
+    },
+    "scripted_outage_acceptance": {
+      "passed": true,
+      "command": "./scripts/outage_baseline_test.py",
+      "analog_override": "DREAM_MODE_VIDEO_STYLE=analog",
+      "video_styles": {
+        "digital": {"replay_count": 2, "events_per_replay": 10, "max_onset_processing_ms": 4.748},
+        "analog": {"replay_count": 2, "events_per_replay": 10, "max_onset_processing_ms": 2.280}
+      },
+      "conditions": ["black", "frozen"], "requested_durations_ms": [100, 250, 500, 750, 1000],
+      "aborted_event_count": 0, "pending_event_count": 0
+    },
+    "flight_dynamics_acceptance": {
+      "passed": true, "command": "./scripts/flight_dynamics_test.py",
+      "execution_mode": "single_webots_session", "webots_session_count": 1,
+      "scenario_count": 72, "completed_scenario_count": 72, "failed_check_count": 0,
+      "generated_at_utc": "2026-09-22T12:17:28.647457+00:00",
+      "report_path": "logs/validation/20260922T121648872150Z/report.json",
+      "report_sha256": "fb2f798a50a1f878ae3f7516ffb244a528892301a69a3d07489d423f7309cfd2",
+      "determinism_replay_fingerprint_sha256": "a71e85cc6dc2862fbba625792204b4bde38127e7075155b56ad8fd2d127bfbd0"
+    }
+  },
+  "scope_boundary": {
+    "flight_model_changed": false, "course_changed": false, "pilot_camera_profiles_changed": false,
+    "duration_clock": "simulation time, quantized to 16 ms display frames",
+    "manual_runs_are_preplanned_trials": false, "predictive_display_implemented": false,
+    "rf_or_codec_failure_emulated": false, "physical_digital_twin_validated": false
+  }
+}

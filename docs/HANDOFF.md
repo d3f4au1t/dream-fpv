@@ -1,6 +1,6 @@
 # Dream FPV project handoff
 
-Last updated: 2026-09-18
+Last updated: 2026-09-22
 
 This document is the starting point for a new Codex chat. Read it before
 changing or running the project. It records the research objective, the user's
@@ -46,6 +46,11 @@ The original two-year plan is summarized as:
 
 Phase 2 is complete. Do not start Phase 3 unless the user asks.
 
+The latest user request was manual outages with three different keys and times.
+Version 2.4.0 implements `1` = 250 ms, `2` = 500 ms, `3` = 1000 ms by default,
+with no automatic outages. Live video returns automatically; flight continues.
+This request does not authorize starting the predictive display.
+
 ## 2. User environment and preferences
 
 - Main computer: Mac.
@@ -87,26 +92,31 @@ Never discard unrelated user changes. Avoid destructive Git commands.
   `ee2eac8e967784e686bb403d29d363a337b1cc2f`
 - Phase 2.3.0 validated source commit:
   `135b6f633bcd82fe123a90857754c851541594cb`
-- Current Phase 2 tag: `apparatus-v2.3.0` (annotated and pushed)
-- Current Phase 2 validation record: `validation/apparatus-v2.3.0.json`
+- Phase 2.4.0 validated source commit:
+  `811b38577fdb2f99fcf7bd1844cd58d5a8920ebd`
+- Current Phase 2 tag: `apparatus-v2.4.0` (annotated and pushed)
+- Current Phase 2 validation record: `validation/apparatus-v2.4.0.json`
+- Previous visual-profile release: `apparatus-v2.3.0` /
+  `validation/apparatus-v2.3.0.json`
 - Historical qualified Phase 2 tags and records: `apparatus-v2.0.0` /
   `validation/apparatus-v2.0.0.json` and `apparatus-v2.0.1` /
   `validation/apparatus-v2.0.1.json`
 - Phase 2 apparatus manifest digest:
-  `51964ae91c994989ac022f69c585eeec446fdf7f681969a2c2efc9c42aebfac9`
+  `4cf91102926e7896a97d07bc98b8450b713fb1d88e34d35692a268a7f4d81cda`
 - Phase 2 controller-configuration digest:
   `0d689e09986e5b328d081f515b9a400932cd2084ac21d1baf0331d30ddbf9424`
 
-At the time this handoff was updated, one normal interactive Webots process was
-left open in the default digital mode with the outage emulator off. Camera
-diagnostic panes were hidden so the mounted viewport is the only pilot image.
-Process IDs are transient; recheck with:
+Normal launches now use digital view with manual outage keys enabled. Camera
+diagnostic panes should remain hidden so the mounted viewport is the only pilot
+image. Process IDs are transient; always check before launching another window:
 
 ```bash
 pgrep -fal '^/Applications/Webots.app/Contents/MacOS/webots'
 ```
 
-The Phase 2 source and release bookkeeping are complete. Version 2.3.0 maps the
+The Phase 2 source and release bookkeeping are complete. Version 2.4.0 adds
+manual outage shortcuts and preserves the pilot profiles introduced in 2.3.0.
+Version 2.3.0 maps the
 default digital view to the standard DJI O4 Air Unit and Goggles 3 Racing Mode,
 including its 117.6° optics and clean Normal-color presentation. Analog maps to
 a good-link Foxeer Predator 5 NTSC/CVBS feed through a modern deinterlaced
@@ -202,6 +212,16 @@ Requested durations are quantized upward to complete display frames:
 
 ### Schedules
 
+- `manual` (default): keys `1`/`2`/`3` cut video for requested 250/500/1000 ms,
+  rounded to 256/512/1008 ms. Click the running flight viewport first. These
+  work with a USB controller and both display styles. Durations use simulation
+  time, so real-time Webots mode is needed for real-time practice;
+- held keys trigger once, active/pending intervals ignore extra presses,
+  simultaneous keys choose the lowest number, and recovery cancels pending
+  manual requests as well as restoring active cuts;
+- manual bindings and condition are frozen in the schedule digest; actual
+  key/step requests and realized start/end/cancel events are logged separately;
+- `off`: disables all outage injection, including manual keys;
 - `deterministic`: ten balanced zone-triggered events, every condition-duration
   pair exactly once;
 - `randomized`: seeded, repeatable selection of six unique course zones;
@@ -210,7 +230,8 @@ Requested durations are quantized upward to complete display frames:
 - `scripted` mode is reserved for acceptance tests.
 
 Interactive zone-triggered events happen only if the pilot reaches the relevant
-course section. They are not fabricated on a timer.
+course section. They are not fabricated on a timer. Manual keys are ignored in
+formal deterministic/randomized/scripted runs to preserve those trials.
 
 ### Recorded evidence
 
@@ -276,7 +297,7 @@ git rev-parse origin/main
 Before launching Webots, check for the existing process. If a window is already
 open, leave it alone.
 
-Normal simulator, outage emulator off:
+Normal simulator, manual shortcuts enabled:
 
 ```bash
 ./scripts/run_webots.sh
@@ -291,6 +312,7 @@ Phase 2 interactive modes:
 ./scripts/run_phase2.sh deterministic black
 ./scripts/run_phase2.sh randomized frozen
 ./scripts/run_phase2.sh deterministic configured analog
+./scripts/run_phase2.sh manual frozen
 ```
 
 Non-GUI validation:
@@ -306,6 +328,8 @@ Simulator checks, only when compatible with the user's one-window request:
 ./scripts/smoke_test.sh
 ./scripts/outage_baseline_test.py
 DREAM_MODE_VIDEO_STYLE=analog ./scripts/outage_baseline_test.py
+./scripts/outage_baseline_test.py --manual
+DREAM_MODE_VIDEO_STYLE=analog ./scripts/outage_baseline_test.py --manual
 ./scripts/flight_dynamics_test.py
 ```
 
@@ -315,6 +339,25 @@ The former behavior exists only behind `--legacy-multi-session` and should not
 be used without the user's explicit direction.
 
 ## 8. Verified results
+
+Version 2.4.0 passed:
+
+- static verification of 13 locked files and 10 course zones;
+- 112 unit tests, including 13 manual-outage tests;
+- digital and analog startup smoke, 161 telemetry rows each, no unrequested cuts;
+- manual acceptance in each style: two replays of all three durations, held
+  keys past restoration and an extra key while busy, exact frame intervals,
+  physical-display readback, continuing hidden RGB-D and automatic live return;
+- maximum manual onset work: digital 2.536 ms, analog 1.968 ms;
+- rendered viewpoint samples inspected during outage/recovery; acceptance
+  injects bounded held-key samples into the real keyboard edge handler, not OS
+  keystrokes, and does not steal focus;
+- existing scripted acceptance: two ten-event replays per style, all five
+  durations in both conditions, maximum onset work 4.748/2.280 ms respectively;
+- all 72 flight scenarios in one hidden Webots session, zero failed checks,
+  matching determinism fingerprints.
+
+Historical visual-profile evidence:
 
 The following checks were completed against the Phase 2.3.0 locked files:
 
@@ -333,17 +376,17 @@ The following checks were completed against the Phase 2.3.0 locked files:
 - Phase 2.3.0 flight dynamics: 72/72 passed with zero failed checks in one
   Webots session; the two determinism replay fingerprints matched.
 
-## 9. Phase 2.3.0 release completion
+## 9. Phase 2.4.0 release completion
 
-- `validation/apparatus-v2.3.0.json` records direct static, unit, dual-mode
-  startup/outage, dual-mode visual and complete 72-scenario evidence.
-- Commit `135b6f633bcd82fe123a90857754c851541594cb` is the clean validated source.
-- Annotated tag `apparatus-v2.3.0` points to the commit containing this record
+- `validation/apparatus-v2.4.0.json` records static, unit, dual-style startup,
+  manual/scripted outage and complete 72-scenario evidence.
+- Commit `811b38577fdb2f99fcf7bd1844cd58d5a8920ebd` is the clean validated source.
+- Annotated tag `apparatus-v2.4.0` points to the commit containing this record
   and is pushed to `origin`.
-- The existing Webots window was left open in default digital mode.
+- Use/reuse a single interactive Webots window, with digital/manual defaults.
 
-The older Phase 2 records remain as historical evidence. Version 2.3.0
-supersedes them for the hardware-referenced pilot-view profiles.
+The older Phase 2 records remain as historical evidence. Version 2.4.0 changes
+outage triggering only; the flight model, course and pilot cameras are unchanged.
 
 ## 10. Known limits and research boundaries
 
