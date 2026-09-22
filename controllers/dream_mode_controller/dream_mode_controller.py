@@ -123,7 +123,7 @@ class DreamModeController(Supervisor):
             with self.outage_config_path.open(encoding="utf-8") as outage_file:
                 self.outage_config = json.load(outage_file)
             self.outage_mode = os.environ.get(
-                "DREAM_MODE_OUTAGE_MODE", "off"
+                "DREAM_MODE_OUTAGE_MODE", "manual"
             ).strip().lower()
             configured_video_style = os.environ.get(
                 "DREAM_MODE_VIDEO_STYLE",
@@ -177,6 +177,23 @@ class DreamModeController(Supervisor):
             raise RuntimeError("Outage RGB-D anchor period does not match depth")
         self.outage_config_sha256 = file_sha256(self.outage_config_path)
         self.outage_runtime = OutageRuntime(self.outage_schedule)
+        self.manual_outage_keys_down = set()
+        # Acceptance-only held-key samples exercise the real keyboard edge path
+        # without activating a window or sending keystrokes to the user's apps.
+        self.test_outage_key_ranges = []
+        test_keys = os.environ.get("DREAM_MODE_TEST_OUTAGE_KEYS")
+        if test_keys is not None:
+            if int(os.environ.get("DREAM_MODE_SMOKE_STEPS", "0")) <= 0:
+                raise ValueError("Test outage keys require a bounded smoke-test run")
+            ranges = json.loads(test_keys)
+            if not isinstance(ranges, list) or any(
+                not isinstance(item, list) or len(item) != 3
+                or type(item[0]) is not int or type(item[1]) is not int
+                or not 0 < item[0] < item[1] or item[2] not in ("1", "2", "3")
+                for item in ranges
+            ):
+                raise ValueError("Test outage keys must be [start_step, end_step, key] ranges")
+            self.test_outage_key_ranges = ranges
         self.apparatus_version_parts = tuple(
             int(part) for part in self.apparatus["version"].split(".")
         )
@@ -463,6 +480,16 @@ class DreamModeController(Supervisor):
             print(
                 "Phase 2 outage emulator is off; "
                 f"{self.pilot_video_style} pilot display is live."
+            )
+        elif self.outage_mode == "manual":
+            bindings = self.outage_schedule["manual"]["key_durations_ms"]
+            shortcuts = ", ".join(
+                f"{key} = {duration / 1000:g}s" for key, duration in bindings.items()
+            )
+            print(
+                f"Manual video outages ({self.outage_schedule['manual']['condition']}): "
+                f"{shortcuts}. Click the flight view, then tap a key. "
+                "Video returns automatically; flight controls stay active."
             )
         else:
             print(
@@ -776,6 +803,7 @@ class DreamModeController(Supervisor):
                 "config_sha256": self.outage_config_sha256,
                 "schedule_file": "outage_schedule.json",
                 "schedule_sha256": self.outage_schedule["schedule_sha256"],
+                "manual": self.outage_schedule.get("manual"),
                 "pilot_display": {
                     "device": "pilot display",
                     "video_style": self.pilot_video_style,
@@ -1009,9 +1037,12 @@ class DreamModeController(Supervisor):
         pitch = 0.0
         yaw = 0.0
         active = False
+        outage_keys_down = set()
         key = self.keyboard.getKey()
         while key != -1:
-            if key == Keyboard.LEFT:
+            if key in (ord("1"), ord("2"), ord("3")):
+                outage_keys_down.add(chr(key))
+            elif key == Keyboard.LEFT:
                 roll = 1.0
                 active = True
             elif key == Keyboard.RIGHT:
@@ -1047,6 +1078,16 @@ class DreamModeController(Supervisor):
                 self.manual_arm_requested = True
                 active = True
             key = self.keyboard.getKey()
+        # Webots reports currently held keys on each sample. Only a new press
+        # triggers; rejected presses are consumed too, never deferred to return.
+        for start, end, outage_key in self.test_outage_key_ranges:
+            if start <= self.step_count < end:
+                outage_keys_down.add(outage_key)
+        for outage_key in sorted(outage_keys_down - self.manual_outage_keys_down):
+            event = self.outage_runtime.request_manual(outage_key, self.step_count)
+            if event is not None:
+                self._write_outage_event("manual_request", event=event)
+        self.manual_outage_keys_down = outage_keys_down
         return (roll, pitch, yaw, self.throttle), active
 
     def _close_joystick(self, *, retry_next_candidate: bool = False) -> None:
@@ -1924,6 +1965,8 @@ class DreamModeController(Supervisor):
             artifact_directory=str(directory.relative_to(self.run_dir)),
             **self._outage_flight_state(),
         )
+        if event["trigger"]["type"] == "manual_key":
+            print(f"Video outage: {event['requested_duration_ms'] / 1000:g}s ({effective_condition}).")
 
     def _finish_outage(self, event: dict, *, abort_reason: str | None = None) -> None:
         record = self.outage_current_artifact
@@ -1972,13 +2015,18 @@ class DreamModeController(Supervisor):
         self.outage_artifact_dir = None
         self.outage_current_artifact = None
         self.outage_midpoint_saved = False
+        if event["trigger"]["type"] == "manual_key":
+            print("Live video restored.")
 
     def _abort_active_outage(self, reason: str) -> None:
         if not hasattr(self, "outage_runtime"):
             return
         transition = self.outage_runtime.abort(self.step_count, reason)
         if transition is not None:
-            self._finish_outage(transition["event"], abort_reason=reason)
+            if transition["type"] == "cancel":
+                self._write_outage_event("cancel", event=transition["event"], abort_reason=reason)
+            else:
+                self._finish_outage(transition["event"], abort_reason=reason)
 
     def _save_outage_midpoint(self) -> None:
         if self.outage_current_artifact is None or self.outage_midpoint_saved:
@@ -2481,6 +2529,7 @@ class DreamModeController(Supervisor):
                     started_event_count=len(self.outage_runtime.started_ids),
                     ended_event_count=len(self.outage_runtime.ended_ids),
                     aborted_event_count=len(self.outage_runtime.aborted_ids),
+                    cancelled_event_count=len(self.outage_runtime.cancelled_ids),
                     pending_event_count=len(self.outage_runtime.pending),
                 )
                 self._restore_live_pilot_display()

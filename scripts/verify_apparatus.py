@@ -250,6 +250,10 @@ def verify_semantic_claims(apparatus: dict, zones: dict, config: dict) -> None:
         validate_zone_references(outage_config, randomized_schedule, zones)
 
         outage_claim = apparatus.get("video_outages", {})
+        if outage_claim.get("default_mode") != "manual":
+            raise SemanticVerificationError("Default outage mode must be manual")
+        if outage_claim.get("manual") != outage_config.get("manual"):
+            raise SemanticVerificationError("Manual outage key claims disagree")
         if outage_claim.get("conditions") != outage_config.get("conditions"):
             raise SemanticVerificationError("Outage condition claims disagree")
         if outage_claim.get("requested_durations_ms") != outage_config["timing"].get(

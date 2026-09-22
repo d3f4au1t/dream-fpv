@@ -17,7 +17,7 @@ from typing import Any, Iterable
 
 
 ALLOWED_CONDITIONS = frozenset(("black", "frozen"))
-ALLOWED_MODES = frozenset(("off", "deterministic", "randomized", "scripted"))
+ALLOWED_MODES = frozenset(("off", "manual", "deterministic", "randomized", "scripted"))
 SAFE_ID_PATTERN = re.compile(r"[a-z][a-z0-9_]*")
 
 
@@ -159,6 +159,19 @@ def validate_config(config: dict[str, Any]) -> None:
         raise OutageConfigurationError(
             "conditions must be a unique non-empty list containing black/frozen"
         )
+
+    manual = config.get("manual")
+    if not isinstance(manual, dict) or manual.get("condition") not in conditions:
+        raise OutageConfigurationError("manual.condition must be a configured condition")
+    bindings = manual.get("key_durations_ms")
+    if not isinstance(bindings, dict) or set(bindings) != {"1", "2", "3"}:
+        raise OutageConfigurationError("manual.key_durations_ms must bind keys 1, 2 and 3")
+    for key, duration in bindings.items():
+        value = _finite_number(duration, f"manual.key_durations_ms.{key}", minimum=0.000001)
+        if value not in duration_values:
+            raise OutageConfigurationError("Manual durations must be listed in timing.durations_ms")
+    if len(set(bindings.values())) != 3:
+        raise OutageConfigurationError("Manual keys must have three different durations")
 
     deterministic = config.get("deterministic_events")
     if not isinstance(deterministic, list) or not deterministic:
@@ -351,7 +364,7 @@ def materialize_schedule(
     anchor_period_ms = int(timing["rgbd_anchor_period_ms"])
     seed = int(config["random_seed"] if seed_override is None else seed_override)
 
-    if mode == "off":
+    if mode in {"off", "manual"}:
         templates: list[dict[str, Any]] = []
     elif mode == "deterministic":
         templates = deepcopy(config["deterministic_events"])
@@ -437,6 +450,9 @@ def materialize_schedule(
         "interval_rule": "half-open [start_step, end_step)",
         "events": materialized,
     }
+    if mode == "manual":
+        payload["manual"] = deepcopy(config["manual"])
+        payload["manual"]["condition"] = condition_override or config["manual"]["condition"]
     payload["schedule_sha256"] = canonical_sha256(payload)
     return payload
 
@@ -469,7 +485,9 @@ class OutageRuntime:
         if expected_hash != canonical_sha256(unhashed):
             raise OutageConfigurationError("Materialized schedule hash does not match")
         self.schedule = deepcopy(schedule)
-        self.events = self.schedule["events"]
+        # The immutable plan records manual bindings, not future key presses.
+        # Realized manual events live in the event log and this runtime list.
+        self.events = deepcopy(self.schedule["events"])
         self.anchor_quantum_steps = (
             int(schedule["rgbd_anchor_period_ms"])
             // int(schedule["control_step_ms"])
@@ -480,6 +498,7 @@ class OutageRuntime:
         self.completed_ids: set[str] = set()
         self.ended_ids: set[str] = set()
         self.aborted_ids: set[str] = set()
+        self.cancelled_ids: set[str] = set()
         self.zone_visits: dict[int, int] = {}
         self.previous_zone_code = 0
         self.previous_step = -1
@@ -492,8 +511,48 @@ class OutageRuntime:
     def current_event_id(self) -> str | None:
         return None if self.current is None else str(self.current["id"])
 
+    def request_manual(self, key: str, control_step: int) -> dict[str, Any] | None:
+        """Accept one key edge; never queue, extend or overlap an interruption."""
+        if self.schedule["mode"] != "manual":
+            return None
+        bindings = self.schedule["manual"]["key_durations_ms"]
+        if key not in bindings or self.current is not None or self.pending:
+            return None
+        if control_step <= self.previous_step or control_step < 1:
+            raise OutageRuntimeError("Manual requests must precede advance on a new step")
+        start_step = ceil_to_multiple(control_step, self.anchor_quantum_steps)
+        ordinal = len(self.events) + 1
+        event = {
+            "id": f"manual_{ordinal:03d}",
+            "ordinal": ordinal,
+            "condition": self.schedule["manual"]["condition"],
+            "trigger": {
+                "type": "manual_key",
+                "key": key,
+                "requested_step": control_step,
+                "planned_start_step": start_step,
+                "effective_start_ms": start_step * self.schedule["control_step_ms"],
+            },
+            **quantize_duration(
+                bindings[key],
+                control_step_ms=self.schedule["control_step_ms"],
+                display_period_ms=self.schedule["display_period_ms"],
+            ),
+        }
+        self.events.append(deepcopy(event))
+        self.pending.append({**deepcopy(event), "realized_start_step": start_step})
+        return event
+
     def abort(self, control_step: int, reason: str) -> dict[str, Any] | None:
         """End the active interval early without moving later triggers."""
+        if self.schedule["mode"] == "manual" and self.pending:
+            event = self.pending.pop()
+            self.completed_ids.add(str(event["id"]))
+            self.cancelled_ids.add(str(event["id"]))
+            return {
+                "type": "cancel", "control_step": control_step,
+                "event": deepcopy(event), "reason": reason,
+            }
         if self.current is None:
             return None
         if control_step < int(self.current["start_step"]):
@@ -541,7 +600,7 @@ class OutageRuntime:
 
         for event in self.events:
             event_id = str(event["id"])
-            if event_id in self.started_ids or any(
+            if event_id in self.started_ids or event_id in self.completed_ids or any(
                 candidate["id"] == event_id for candidate in self.pending
             ):
                 continue
@@ -551,7 +610,8 @@ class OutageRuntime:
                 if control_step >= int(trigger["planned_start_step"]):
                     planned_start = int(trigger["planned_start_step"])
             elif (
-                entered_zone
+                trigger["type"] == "zone_entry"
+                and entered_zone
                 and zone_code == int(trigger["zone_code"])
                 and self.zone_visits[zone_code] == int(trigger.get("visit", 1))
             ):

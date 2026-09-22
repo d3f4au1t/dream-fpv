@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "experiment_id": "dream_mode_outage_baselines",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "random_seed": 2907,
   "timing": {
     "control_step_ms": 8,
@@ -10,6 +10,10 @@
     "durations_ms": [100, 250, 500, 750, 1000]
   },
   "conditions": ["black", "frozen"],
+  "manual": {
+    "condition": "black",
+    "key_durations_ms": {"1": 250, "2": 500, "3": 1000}
+  },
   "deterministic_events": [
     {
       "id": "baseline_001",

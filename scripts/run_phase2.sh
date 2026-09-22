@@ -13,18 +13,18 @@ if [[ ! -x "$webots_bin" ]]; then
   exit 1
 fi
 
-if [[ "$outage_mode" != "deterministic" && "$outage_mode" != "randomized" ]]; then
-  print -u2 "Usage: ./scripts/run_phase2.sh [deterministic|randomized] [configured|black|frozen] [digital|analog]"
+if [[ "$outage_mode" != "manual" && "$outage_mode" != "deterministic" && "$outage_mode" != "randomized" ]]; then
+  print -u2 "Usage: ./scripts/run_phase2.sh [manual|deterministic|randomized] [configured|black|frozen] [digital|analog]"
   exit 2
 fi
 
 if [[ "$outage_condition" != "configured" && "$outage_condition" != "black" && "$outage_condition" != "frozen" ]]; then
-  print -u2 "Usage: ./scripts/run_phase2.sh [deterministic|randomized] [configured|black|frozen] [digital|analog]"
+  print -u2 "Usage: ./scripts/run_phase2.sh [manual|deterministic|randomized] [configured|black|frozen] [digital|analog]"
   exit 2
 fi
 
 if [[ "$video_style" != "digital" && "$video_style" != "analog" ]]; then
-  print -u2 "Usage: ./scripts/run_phase2.sh [deterministic|randomized] [configured|black|frozen] [digital|analog]"
+  print -u2 "Usage: ./scripts/run_phase2.sh [manual|deterministic|randomized] [configured|black|frozen] [digital|analog]"
   exit 2
 fi
 

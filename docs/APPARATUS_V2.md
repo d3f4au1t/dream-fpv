@@ -1,6 +1,6 @@
-# Dream FPV Experimental Apparatus v2.3.0
+# Dream FPV Experimental Apparatus v2.4.0
 
-Status: **frozen** on 2026-09-18.
+Status: source frozen on 2026-09-22; release acceptance pending.
 
 Version 2 adds reproducible pilot-video interruption baselines to the Phase 1
 flight apparatus. It is intended for controlled simulator experiments that
@@ -91,6 +91,30 @@ moving simulator time or pausing the physics engine.
 
 ## Schedules
 
+### Manual (default)
+
+Normal launches have no automatic outages. With the running flight viewport
+focused, keys `1`, `2`, and `3` request black video for 250, 500, and 1000 ms
+(frame-aligned to 256, 512, and 1008 ms). Timing uses simulation time. Each press
+starts at the next 64 ms RGB-D boundary and restores live video automatically;
+flight controls and physics continue. Shortcuts work with a connected radio and
+in both pilot-video styles. A frozen condition override is also supported.
+
+Keys are edge-triggered. Held keys do not repeat; presses while an outage is
+pending or active are consumed rather than queued or used to extend its end.
+Simultaneous keys prefer the lowest number. Recovery cancels a pending manual
+request or aborts an active interval, without triggering it later.
+
+The immutable `outage_schedule.json` contains the key bindings and condition,
+not future key presses. `outage_events.jsonl` records each accepted
+`manual_request`, its requested step/key, aligned start, duration and realized
+start/end/abort or pre-onset `cancel`. Runtime event counts include accepted
+manual requests; cancelled requests are counted separately. The original plan
+digest does not change during a run. Per-frame and RGB-D evidence use the same
+path as scheduled baselines. Manual runs are practice/exploratory data, not a
+preplanned repeatable trial. `off`, deterministic, randomized and scripted modes
+do not accept manual keys.
+
 ### Deterministic
 
 The deterministic mode contains ten events, covering each requested duration
@@ -133,7 +157,7 @@ list; it is not the normal interactive workflow.
 
 ## Running Phase 2
 
-Normal simulator launches leave the outage emulator disabled:
+Normal simulator launches enable manual outage shortcuts:
 
 ```bash
 ./scripts/run_webots.sh
@@ -148,6 +172,7 @@ override and optional pilot-video style:
 ./scripts/run_phase2.sh deterministic black
 ./scripts/run_phase2.sh deterministic frozen
 ./scripts/run_phase2.sh deterministic configured analog
+./scripts/run_phase2.sh manual frozen
 ```
 
 The same experiment can be configured directly with
@@ -211,6 +236,7 @@ condition-duration pairs:
 
 ```bash
 ./scripts/outage_baseline_test.py
+./scripts/outage_baseline_test.py --manual
 ```
 
 It requires both replays to agree on their transition and frame signatures. It
@@ -229,9 +255,12 @@ python3 -m unittest discover -s tests -v
 ./scripts/flight_dynamics_test.py
 ```
 
-The signed-off result is stored in
-`validation/apparatus-v2.3.0.json` and the validated source is tagged
-`apparatus-v2.3.0`.
+The previous signed-off result remains in `validation/apparatus-v2.3.0.json`.
+Version 2.4.0 adds dual-style manual acceptance through the real keyboard-edge
+handler using bounded test-only held-key samples. It verifies all three durations,
+presses while busy, held keys past restoration, physical display contents,
+continuing hidden ground truth and exact restoration timing. It does not send
+OS keystrokes or steal focus from an interactive window.
 
 The flight-dynamics runner uses one hidden Webots process for the complete
 72-scenario suite. It reloads the frozen world between isolated scenarios,
@@ -276,5 +305,5 @@ multi-process behavior remains available only for diagnosis with
   scenarios pass.
 - Two end-to-end outage replays pass every duration in both conditions with
   exact timing, valid artifacts, and no aborted or pending events.
-- The validation summary and `apparatus-v2.3.0` Git tag identify the frozen
+- The validation summary and `apparatus-v2.4.0` Git tag identify the frozen
   source used for the apparatus.

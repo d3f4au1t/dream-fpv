@@ -16,6 +16,7 @@ unset DREAM_MODE_KEEP_SMOKE
 unset DREAM_MODE_OUTAGE_MODE DREAM_MODE_OUTAGE_CONDITION
 unset DREAM_MODE_OUTAGE_SEED DREAM_MODE_OUTAGE_SCRIPT
 unset DREAM_MODE_LOG_DISPLAY_FRAMES
+unset DREAM_MODE_TEST_OUTAGE_KEYS
 
 terminate_test_instance() {
   if [[ -n "$webots_pid" ]] && kill -0 "$webots_pid" 2>/dev/null; then
@@ -237,8 +238,8 @@ if marker.get("controller_config_sha256") != controller_config_sha256:
     raise SystemExit("Smoke marker and run manifest controller config SHA-256 disagree")
 if marker.get("pilot_display_width") != 480 or marker.get("pilot_display_height") != 270:
     raise SystemExit("Smoke marker has unexpected pilot display dimensions")
-if marker.get("outage_mode") != "off":
-    raise SystemExit("Normal smoke run unexpectedly enabled outage injection")
+if marker.get("outage_mode") != "manual":
+    raise SystemExit("Normal smoke run did not enable manual outage shortcuts")
 runtime = run_manifest.get("runtime", {})
 if runtime.get("webots_actual_version") != runtime.get("webots_tested_version"):
     raise SystemExit(f"Unexpected Webots runtime version: {runtime}")
@@ -377,7 +378,7 @@ for first, second in zip(times, times[1:]):
 
 with outage_schedule_path.open(encoding="utf-8") as schedule_file:
     outage_schedule = json.load(schedule_file)
-if outage_schedule.get("mode") != "off" or outage_schedule.get("events") != []:
+if outage_schedule.get("mode") != "manual" or outage_schedule.get("events") != []:
     raise SystemExit("Normal smoke run has a non-empty outage schedule")
 if outage_schedule.get("schedule_sha256") != marker.get("outage_schedule_sha256"):
     raise SystemExit("Smoke marker and outage schedule digests disagree")
@@ -399,8 +400,8 @@ if any(events[-1].get(name) != 0 for name in (
     raise SystemExit("Normal smoke run has unexpected outage event counts")
 with display_frames_path.open(newline="", encoding="utf-8") as frame_file:
     display_rows = list(csv.DictReader(frame_file))
-if display_rows:
-    raise SystemExit("Normal smoke run unexpectedly logged display frames")
+if not display_rows or any(row["display_mode"] != "normal" for row in display_rows):
+    raise SystemExit("Normal smoke run did not retain uninterrupted live display frames")
 
 if marker["drone_z_m"] <= 0.25:
     raise SystemExit(

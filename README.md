@@ -2,7 +2,7 @@
 
 Dream FPV is a Webots-based FPV research simulator for controlled video-loss experiments. It includes an acro quad model, a technical practice course, a camera-backed pilot view, synchronized RGB/depth capture, external-controller input, recovery logic, and timestamped telemetry.
 
-The frozen Phase 1 flight baseline is tagged `apparatus-v1.0.0`. Phase 2 keeps that flight model and course unchanged and adds reproducible black-screen and frozen-frame outage baselines. The current Phase 2 apparatus version is `2.3.0`. See the [Phase 1 apparatus record](docs/APPARATUS_V1.md), [Phase 2 apparatus record](docs/APPARATUS_V2.md), [project handoff](docs/HANDOFF.md), and the corresponding validation summaries under [`validation/`](validation/).
+The frozen Phase 1 flight baseline is tagged `apparatus-v1.0.0`. Phase 2 keeps that flight model and course unchanged and adds reproducible black-screen and frozen-frame outage baselines. The current Phase 2 apparatus version is `2.4.0`, adding manual outage shortcuts. See the [Phase 1 apparatus record](docs/APPARATUS_V1.md), [Phase 2 apparatus record](docs/APPARATUS_V2.md), [project handoff](docs/HANDOFF.md), and the corresponding validation summaries under [`validation/`](validation/).
 
 This is an experimental software apparatus, not a validated digital twin of a physical aircraft.
 
@@ -83,6 +83,31 @@ The checked-in reference mapping uses axes 0–3 for roll, pitch, throttle, and 
 
 When a supported external controller is active, keyboard flight axes and throttle are ignored. Disconnect the device or launch with `DREAM_MODE_DISABLE_JOYSTICK=1` to use the keyboard.
 
+### Manual video outages
+
+Click the flight viewport while the simulation is running, then tap a number key:
+
+| Key | Video cut | Actual frame-aligned duration |
+|---|---|---|
+| `1` | ¼ second | 256 ms |
+| `2` | ½ second | 512 ms |
+| `3` | 1 second | 1008 ms |
+
+These shortcuts are enabled by default in both digital and analog modes, including
+when flying with a USB controller. Only the video goes black: physics and controls
+continue, and live video returns automatically. Durations use simulation time;
+use Webots real-time mode for real-time practice. Holding a key triggers once;
+presses while an outage is pending or active are ignored, not queued or extended.
+Release and press again for another outage. Simultaneous presses choose the
+lowest-numbered key. Crash recovery cancels pending or active outages.
+
+The requested cut starts at the next synchronized RGB-D frame (up to 64 ms
+including display-command latency). Edit `manual.key_durations_ms` in the outage
+configuration to change the three presets, following the apparatus versioning
+procedure. For frozen-frame practice use `./scripts/run_phase2.sh manual frozen`.
+Set `DREAM_MODE_OUTAGE_MODE=off` to disable all outage shortcuts. Formal
+deterministic/randomized runs ignore them so keyboard input cannot alter a trial.
+
 ## Flight behavior
 
 The aircraft uses acro/rate control. Centering roll, pitch, or yaw stops rotation; it does not level the aircraft.
@@ -132,7 +157,7 @@ The requested durations are quantized upward to the 16 ms display period. Both t
 | 750 ms | 752 ms | 47 |
 | 1000 ms | 1008 ms | 63 |
 
-Normal launches keep the outage emulator off:
+Normal launches enable manual `1`/`2`/`3` outages, with no automatic schedule:
 
 ```bash
 ./scripts/run_webots.sh
@@ -204,6 +229,8 @@ Run the end-to-end Phase 2 outage acceptance test:
 ```bash
 ./scripts/outage_baseline_test.py
 DREAM_MODE_VIDEO_STYLE=analog ./scripts/outage_baseline_test.py
+./scripts/outage_baseline_test.py --manual
+DREAM_MODE_VIDEO_STYLE=analog ./scripts/outage_baseline_test.py --manual
 ```
 
 This runs two isolated replays of all ten condition-duration pairs and checks schedule reproducibility, exact display-frame intervals, pilot-display output, hidden ground truth, telemetry, artifacts, and return to live video.

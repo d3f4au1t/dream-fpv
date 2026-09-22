@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import csv
+import argparse
 import hashlib
 import json
 import math
@@ -119,7 +120,7 @@ def terminate_test_instance(port: int) -> None:
             pass
 
 
-def launch_once(run_dir: Path, script: list[dict], smoke_steps: int) -> None:
+def launch_once(run_dir: Path, script: list[dict], smoke_steps: int, *, manual_keys=None) -> None:
     output_path = run_dir / "webots-output.txt"
     error_path = run_dir / "webots-error.txt"
     launcher_path = run_dir / "launcher-output.txt"
@@ -153,6 +154,10 @@ def launch_once(run_dir: Path, script: list[dict], smoke_steps: int) -> None:
             "QT_MAC_DISABLE_FOREGROUND_APPLICATION_TRANSFORM": "1",
         }
     )
+    if manual_keys is not None:
+        environment["DREAM_MODE_OUTAGE_MODE"] = "manual"
+        environment.pop("DREAM_MODE_OUTAGE_SCRIPT")
+        environment["DREAM_MODE_TEST_OUTAGE_KEYS"] = json.dumps(manual_keys)
     if render_viewpoint:
         environment["DREAM_MODE_CAPTURE_VIEWPOINT"] = "1"
     command = [
@@ -230,13 +235,13 @@ def launch_once(run_dir: Path, script: list[dict], smoke_steps: int) -> None:
         terminate_test_instance(port)
 
 
-def run_with_retries(root: Path, label: str, script: list[dict], steps: int) -> Path:
+def run_with_retries(root: Path, label: str, script: list[dict], steps: int, *, manual_keys=None) -> Path:
     last_error: Exception | None = None
     for attempt in range(1, 4):
         run_dir = root / f"{label}_attempt_{attempt}"
         run_dir.mkdir()
         try:
-            launch_once(run_dir, script, steps)
+            launch_once(run_dir, script, steps, manual_keys=manual_keys)
             return run_dir
         except WebotsStartupError as error:
             last_error = error
@@ -345,7 +350,7 @@ def require(condition: bool, message: str) -> None:
         raise BaselineValidationError(message)
 
 
-def validate_artifacts(run_dir: Path, expected_script: list[dict]) -> dict:
+def validate_artifacts(run_dir: Path, expected_script: list[dict], *, manual=False) -> dict:
     required = (
         "run_manifest.json",
         "outage_schedule.json",
@@ -368,14 +373,16 @@ def validate_artifacts(run_dir: Path, expected_script: list[dict]) -> dict:
         schedule.get("schedule_sha256") == canonical_sha256(unhashed_schedule),
         "materialized outage schedule digest is invalid",
     )
-    require(schedule.get("mode") == "scripted", "run did not use scripted mode")
-    require(len(schedule.get("events", [])) == len(expected_script), "wrong event count")
+    expected_mode = "manual" if manual else "scripted"
+    require(schedule.get("mode") == expected_mode, "run used wrong outage mode")
+    expected_plan_count = 0 if manual else len(expected_script)
+    require(len(schedule.get("events", [])) == expected_plan_count, "wrong event count")
     require(
         marker.get("outage_schedule_sha256") == schedule["schedule_sha256"],
         "marker and schedule digests disagree",
     )
     outage_manifest = manifest.get("outage_baseline", {})
-    require(outage_manifest.get("mode") == "scripted", "manifest mode is wrong")
+    require(outage_manifest.get("mode") == expected_mode, "manifest mode is wrong")
     require(
         outage_manifest.get("schedule_sha256") == schedule["schedule_sha256"],
         "manifest and schedule digests disagree",
@@ -425,6 +432,20 @@ def validate_artifacts(run_dir: Path, expected_script: list[dict]) -> dict:
 
     starts = {event["event"]["id"]: event for event in events if event["type"] == "start"}
     ends = {event["event"]["id"]: event for event in events if event["type"] == "end"}
+    realized_events = schedule["events"]
+    if manual:
+        require(schedule["manual"]["key_durations_ms"] == {"1": 250, "2": 500, "3": 1000}, "manual bindings changed")
+        requests = [event["event"] for event in events if event["type"] == "manual_request"]
+        require(len(requests) == 3, "held or busy keys caused extra requests")
+        realized_events = [record["event"] for record in starts.values()]
+        for requested, realized, expected in zip(requests, realized_events, expected_script):
+            trigger = realized["trigger"]
+            require(requested["id"] == realized["id"], "manual request/start mismatch")
+            require(trigger["type"] == "manual_key", "outage bypassed manual path")
+            require(trigger["key"] == expected["key"], "wrong key triggered outage")
+            require(trigger["requested_step"] == expected["requested_step"], "key sampled late")
+            require(trigger["planned_start_step"] == math.ceil(expected["requested_step"] / 8) * 8, "manual onset not at next RGB-D boundary")
+            require(realized["requested_duration_ms"] == expected["duration_ms"], "wrong manual duration")
     with (run_dir / "display_frames.csv").open(newline="", encoding="utf-8") as source:
         frame_rows = list(csv.DictReader(source))
     require(frame_rows, "display frame log is empty")
@@ -439,7 +460,7 @@ def validate_artifacts(run_dir: Path, expected_script: list[dict]) -> dict:
     ).hexdigest()
     processing_samples = []
     transition_signature = []
-    for scheduled, requested in zip(schedule["events"], expected_script):
+    for scheduled, requested in zip(realized_events, expected_script):
         event_id = scheduled["id"]
         require(event_id == requested["id"], f"event order changed for {event_id}")
         start_step = int(scheduled["trigger"]["planned_start_step"])
@@ -592,7 +613,7 @@ def validate_artifacts(run_dir: Path, expected_script: list[dict]) -> dict:
             int(row["control_step"]): row for row in csv.DictReader(source)
         }
     condition_codes = {"black": "1", "frozen": "2"}
-    for event in schedule["events"]:
+    for event in realized_events:
         start_step = int(event["trigger"]["planned_start_step"])
         end_step = start_step + int(event["duration_control_steps"])
         require(
@@ -619,18 +640,33 @@ def validate_artifacts(run_dir: Path, expected_script: list[dict]) -> dict:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--manual", action="store_true", help="Exercise 1/2/3 held-key samples through the controller")
+    arguments = parser.parse_args()
     if not WEBOTS.is_file():
         print(f"Webots was not found at {WEBOTS}", file=sys.stderr)
         return 1
     script, smoke_steps = scripted_events()
+    manual_keys = None
+    if arguments.manual:
+        script = [
+            {"id": f"manual_{index:03d}", "key": key, "requested_step": step,
+             "condition": "black", "duration_ms": duration}
+            for index, (key, step, duration) in enumerate(
+                (("1", 32, 250), ("2", 100, 500), ("3", 190, 1000)), start=1
+            )
+        ]
+        # Hold every key past restoration, and try another key while busy.
+        manual_keys = [[32, 90, "1"], [50, 55, "3"], [100, 180, "2"], [190, 340, "3"]]
+        smoke_steps = 360
     keep = os.environ.pop("DREAM_MODE_KEEP_OUTAGE_TEST", "0") == "1"
     root = Path(tempfile.mkdtemp(prefix="dream-mode-outage-test."))
     success = False
     try:
-        first_dir = run_with_retries(root, "first", script, smoke_steps)
-        second_dir = run_with_retries(root, "replay", script, smoke_steps)
-        first = validate_artifacts(first_dir, script)
-        second = validate_artifacts(second_dir, script)
+        first_dir = run_with_retries(root, "first", script, smoke_steps, manual_keys=manual_keys)
+        second_dir = run_with_retries(root, "replay", script, smoke_steps, manual_keys=manual_keys)
+        first = validate_artifacts(first_dir, script, manual=arguments.manual)
+        second = validate_artifacts(second_dir, script, manual=arguments.manual)
         require(first["schedule"] == second["schedule"], "replay schedule changed")
         require(
             first["transition_signature"] == second["transition_signature"],
@@ -646,7 +682,7 @@ def main() -> int:
             second["max_onset_processing_ms"],
         )
         print(
-            "Phase 2 outage baseline passed: "
+            f"Phase 2 {'manual' if arguments.manual else 'scripted'} outage baseline passed: "
             f"2 replays, {len(script)} events each, max onset work {maximum:.3f} ms."
         )
         return 0
